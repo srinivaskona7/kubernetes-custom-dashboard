@@ -380,7 +380,7 @@ const apiRule = ({ hosts = [], service = { name: 'approuter', port: 8080 }, rule
   spec: { gateway: 'kyma-system/kyma-gateway', hosts, service, rules }
 });
 
-const HEADER_RULE = [{ path: '/*', request: { headers: { 'x-forwarded-host': 'responder-dev.btp.sap.apple.com' } } }];
+const HEADER_RULE = [{ path: '/*', request: { headers: { 'x-forwarded-host': 'responder-dev.example.com' } } }];
 
 const graphOf = facts => {
   const resources = [
@@ -395,7 +395,7 @@ const routesEdge = graph => graph.edges.find(e => e.type === 'routes-to' && e.fr
 test('an APIRule reports the forwarded host operators actually hit, and the graph names it', () => {
   const f = related.factsFor('APIRule', apiRule({ hosts: ['approuter-applecare.c-9d0a141.kyma.ondemand.com'], rules: HEADER_RULE }));
 
-  assert.equal(f.forwardedHost, 'responder-dev.btp.sap.apple.com');
+  assert.equal(f.forwardedHost, 'responder-dev.example.com');
   assert.deepEqual(f.hosts, ['approuter-applecare.c-9d0a141.kyma.ondemand.com']);
   assert.equal(f.service, 'approuter');
   assert.equal(f.port, 8080);
@@ -405,24 +405,24 @@ test('an APIRule reports the forwarded host operators actually hit, and the grap
 
   const edge = routesEdge(graphOf(f));
   assert.equal(edge.to, `Service/${NS}/approuter`);
-  assert.equal(edge.evidence, 'APIRule routes external host responder-dev.btp.sap.apple.com to Service/approuter');
+  assert.equal(edge.evidence, 'APIRule routes external host responder-dev.example.com to Service/approuter');
 });
 
 test('the forwarded-host header is read whatever its casing, since HTTP headers are case-insensitive', () => {
   const capitalised = related.factsFor('APIRule', apiRule({
-    rules: [{ path: '/*', request: { headers: { 'X-Forwarded-Host': 'responder-dev.btp.sap.apple.com' } } }]
+    rules: [{ path: '/*', request: { headers: { 'X-Forwarded-Host': 'responder-dev.example.com' } } }]
   }));
-  assert.equal(capitalised.forwardedHost, 'responder-dev.btp.sap.apple.com');
+  assert.equal(capitalised.forwardedHost, 'responder-dev.example.com');
 });
 
 test('the first non-empty forwarded host across the rules wins, and an unrelated header is not one', () => {
   const f = related.factsFor('APIRule', apiRule({
     rules: [
       { path: '/healthz', request: { headers: { 'x-request-id': 'abc' } } },
-      { path: '/*', request: { headers: { 'x-forwarded-host': 'second-rule.btp.sap.apple.com' } } }
+      { path: '/*', request: { headers: { 'x-forwarded-host': 'second-rule.example.com' } } }
     ]
   }));
-  assert.equal(f.forwardedHost, 'second-rule.btp.sap.apple.com');
+  assert.equal(f.forwardedHost, 'second-rule.example.com');
 });
 
 test('without a header the shoot host is still reported, and it is not promoted to the forwarded host', () => {
@@ -451,6 +451,6 @@ test('an APIRule without spec.service draws no edge rather than one to a fabrica
 
   assert.equal(f.service, null);
   assert.equal(f.port, null);
-  assert.equal(f.forwardedHost, 'responder-dev.btp.sap.apple.com');
+  assert.equal(f.forwardedHost, 'responder-dev.example.com');
   assert.equal(routesEdge(graphOf(f)), undefined, 'an edge was drawn to a Service the APIRule never names');
 });

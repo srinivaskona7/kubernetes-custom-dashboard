@@ -385,8 +385,8 @@ function platformsbxShape() {
 
   // (3) The one genuine drift: both pods a release behind the template.
   add('polls', 'polls-frontend',
-    'sapcloudplatform-artifactory.apple.com/btp-kyma/polls/polls-frontend:0.3.0', null,
-    Array(2).fill('sapcloudplatform-artifactory.apple.com/btp-kyma/polls/polls-frontend:0.1.0'));
+    'registry.example.com/btp-kyma/polls/polls-frontend:0.3.0', null,
+    Array(2).fill('registry.example.com/btp-kyma/polls/polls-frontend:0.1.0'));
 
   return { deployments, replicaSets, pods };
 }

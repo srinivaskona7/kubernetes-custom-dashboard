@@ -147,13 +147,6 @@ podDisruptionBudget:
   enabled: false
   minAvailable: 1
 
-# Disabled by default: NetworkPolicy is enforced by the CNI, and the addon
-# differs across EKS (VPC CNI + policy agent), AKS and GKE. Enable it only
-# after checking your datapath enforces policy.
-networkPolicy:
-  enabled: false
-  ingress: []
-  egress: []
 
 nodeSelector: {}
 tolerations: []

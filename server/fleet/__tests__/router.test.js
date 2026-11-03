@@ -1459,7 +1459,7 @@ test('the SSO callback URL is configured, not taken from a proxied request', asy
 
 /**
  * The deployed value an administrator actually has to hand is the console's origin —
- * `https://btp-kyma-bookshop-sbx.btp.sap.apple.com`. The path after it is this router's own
+ * `https://bookshop.example.com`. The path after it is this router's own
  * constant, so requiring it to be retyped is a way to get it subtly wrong, not a way to configure
  * anything: one missing segment and the provider refuses a URI that looks correct on screen.
  *

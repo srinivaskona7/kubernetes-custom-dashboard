@@ -17,7 +17,7 @@ const GW = { namespace: 'istio-system', pod: 'istio-ingressgateway-1' };
 const SRV = { namespace: 'applecare', pod: 'srv-1' };
 const rec = over => ({ proxy: GW, method: 'GET', authority: 'x.example.com', path: '/', code: 403, responseCodeDetails: 'rbac_access_denied_matched_policy[none]', responseFlags: null, upstreamHost: null, startTime: '2026-09-28T10:00:00.000Z', downstreamRemote: '203.0.113.9:5000', ...over });
 const ap = (namespace, name, spec) => ({ metadata: { namespace, name }, spec });
-const ACL = ap('istio-system', 'apple-acl', { selector: { matchLabels: { istio: 'ingressgateway' } }, action: 'ALLOW', rules: [{ from: [{ source: { remoteIpBlocks: ['17.0.0.0/8', '10.0.0.0/8'] } }], to: [{ operation: { hosts: ['*.btp.sap.apple.com'], paths: ['/api/*'], methods: ['GET'] } }] }] });
+const ACL = ap('istio-system', 'ingress-acl', { selector: { matchLabels: { istio: 'ingressgateway' } }, action: 'ALLOW', rules: [{ from: [{ source: { remoteIpBlocks: ['17.0.0.0/8', '10.0.0.0/8'] } }], to: [{ operation: { hosts: ['*.example.com'], paths: ['/api/*'], methods: ['GET'] } }] }] });
 const labels = new Map([['istio-system/istio-ingressgateway-1', { istio: 'ingressgateway' }], ['applecare/srv-1', { app: 'srv' }]]);
 const ctx = (aps = [ACL], over = {}) => ({ gatewayKeys: new Set(['istio-system/istio-ingressgateway-1']), podLabels: labels, authorizationPolicies: { items: aps, unavailable: false }, classOf: () => 'direct-ip', ...over });
 
@@ -27,16 +27,16 @@ test('an ALLOW miss with exactly one selecting ALLOW policy is decided by elimin
   const [d] = rows[0].decidedBy;
   assert.deepEqual(
     { ns: d.namespace, name: d.name, inferred: d.policyInferred, decidedBy: d.decidedBy },
-    { ns: 'istio-system', name: 'apple-acl', inferred: false, decidedBy: 'elimination' }
+    { ns: 'istio-system', name: 'ingress-acl', inferred: false, decidedBy: 'elimination' }
   );
-  assert.deepEqual(d.rules, [{ paths: ['/api/*'], methods: ['GET'], hosts: ['*.btp.sap.apple.com'], principals: [], ipBlocks: 2 }]);
+  assert.deepEqual(d.rules, [{ paths: ['/api/*'], methods: ['GET'], hosts: ['*.example.com'], principals: [], ipBlocks: 2 }]);
   assert.doesNotMatch(JSON.stringify(rows), /17\.0\.0\.0|203\.0\.113\.9/, 'no CIDR and no client address on the wire');
 });
 
 test('two ALLOW policies selecting the gateway stay inferred, neither is elimination', () => {
   const other = ap('istio-system', 'partner-acl', { selector: { matchLabels: { istio: 'ingressgateway' } }, rules: [{}] });
   const { rows } = refusalsOf([rec()], ctx([ACL, other]));
-  assert.deepEqual(rows[0].decidedBy.map(p => p.name).sort(), ['apple-acl', 'partner-acl']);
+  assert.deepEqual(rows[0].decidedBy.map(p => p.name).sort(), ['ingress-acl', 'partner-acl']);
   assert.ok(rows[0].decidedBy.every(p => p.policyInferred));
   assert.ok(rows[0].decidedBy.every(p => p.decidedBy === 'inferred'));
 });
@@ -106,7 +106,7 @@ test('policiesUnavailable agrees with decidedBy: null even when items is a non-e
   assert.equal(rows[0].decidedBy, null);
 });
 
-test('the recorded sbx refusals all produce a row with a plain-words reason, and apple-acl decides the ALLOW misses', () => {
+test('the recorded sbx refusals all produce a row with a plain-words reason, and ingress-acl decides the ALLOW misses', () => {
   const lines = SBX.map(e => rec({ method: e.method, authority: e.authority, path: e.path, code: e.code, responseCodeDetails: (e.responseCodeDetails || [])[0] || null, responseFlags: (e.responseFlags || []).join(',') || null }));
   const { rows } = refusalsOf(lines, ctx());
   assert.ok(rows.length > 0);
@@ -114,7 +114,7 @@ test('the recorded sbx refusals all produce a row with a plain-words reason, and
   const allowMiss = rows.filter(r => r.responseCodeDetails.some(d => d.startsWith('rbac_access_denied_matched_policy[none]')));
   assert.ok(allowMiss.length > 0, 'the fixture has at least one ALLOW-miss row');
   for (const r of allowMiss) {
-    assert.ok(r.decidedBy.some(p => p.name === 'apple-acl'), 'apple-acl should be listed for an ALLOW miss on the gateway');
-    assert.ok(r.decidedBy.every(p => p.decidedBy === 'elimination' && p.policyInferred === false), 'apple-acl is the only ALLOW policy, so elimination decides it, not inference');
+    assert.ok(r.decidedBy.some(p => p.name === 'ingress-acl'), 'ingress-acl should be listed for an ALLOW miss on the gateway');
+    assert.ok(r.decidedBy.every(p => p.decidedBy === 'elimination' && p.policyInferred === false), 'ingress-acl is the only ALLOW policy, so elimination decides it, not inference');
   }
 });
