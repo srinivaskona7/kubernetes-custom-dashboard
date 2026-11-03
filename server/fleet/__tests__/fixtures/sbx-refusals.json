@@ -1,0 +1,140 @@
+[
+  {
+    "code": 403,
+    "authority": "192.0.2.10",
+    "path": "/",
+    "method": "GET",
+    "responseCodeDetails": [
+      "rbac_access_denied_matched_policy[none]"
+    ],
+    "responseFlags": []
+  },
+  {
+    "code": 403,
+    "authority": "192.0.2.10:80",
+    "path": "/favicon.ico",
+    "method": "GET",
+    "responseCodeDetails": [
+      "rbac_access_denied_matched_policy[none]"
+    ],
+    "responseFlags": []
+  },
+  {
+    "code": 403,
+    "authority": "192.0.2.10",
+    "path": "/manage/account/login",
+    "method": "GET",
+    "responseCodeDetails": [
+      "rbac_access_denied_matched_policy[none]"
+    ],
+    "responseFlags": []
+  },
+  {
+    "code": 403,
+    "authority": "192.0.2.10",
+    "path": "/admin/index.html",
+    "method": "GET",
+    "responseCodeDetails": [
+      "rbac_access_denied_matched_policy[none]"
+    ],
+    "responseFlags": []
+  },
+  {
+    "code": 403,
+    "authority": "192.0.2.10",
+    "path": "/index.html",
+    "method": "GET",
+    "responseCodeDetails": [
+      "rbac_access_denied_matched_policy[none]"
+    ],
+    "responseFlags": []
+  },
+  {
+    "code": 403,
+    "authority": "192.0.2.10",
+    "path": "/+CSCOE+/logon.html",
+    "method": "GET",
+    "responseCodeDetails": [
+      "rbac_access_denied_matched_policy[none]"
+    ],
+    "responseFlags": []
+  },
+  {
+    "code": 0,
+    "authority": null,
+    "path": null,
+    "method": null,
+    "responseCodeDetails": [
+      "filter_chain_not_found"
+    ],
+    "responseFlags": [
+      "NR"
+    ]
+  },
+  {
+    "code": 400,
+    "authority": null,
+    "path": "/",
+    "method": "GET",
+    "responseCodeDetails": [
+      "missing_host_header"
+    ],
+    "responseFlags": []
+  },
+  {
+    "code": 400,
+    "authority": null,
+    "path": "/boaform/admin/formLogin?username=admin&psd=admin",
+    "method": "GET",
+    "responseCodeDetails": [
+      "missing_host_header"
+    ],
+    "responseFlags": []
+  },
+  {
+    "code": 400,
+    "authority": null,
+    "path": "/boaform/admin/formLogin?username=ec8&psd=ec8",
+    "method": "GET",
+    "responseCodeDetails": [
+      "missing_host_header"
+    ],
+    "responseFlags": []
+  },
+  {
+    "code": 404,
+    "authority": "kyma-demo-1-approuter-kyma-demo-1.c-9d0a141.kyma.ondemand.com",
+    "path": "/",
+    "method": "GET",
+    "responseCodeDetails": [
+      "route_not_found"
+    ],
+    "responseFlags": [
+      "NR"
+    ]
+  },
+  {
+    "code": 400,
+    "authority": null,
+    "path": null,
+    "method": null,
+    "responseCodeDetails": [
+      "http1.codec_error"
+    ],
+    "responseFlags": [
+      "DPE"
+    ]
+  },
+  {
+    "code": 0,
+    "authority": null,
+    "path": null,
+    "method": null,
+    "responseCodeDetails": [
+      "downstream_remote_disconnect"
+    ],
+    "responseFlags": [
+      "DC"
+    ]
+  }
+]

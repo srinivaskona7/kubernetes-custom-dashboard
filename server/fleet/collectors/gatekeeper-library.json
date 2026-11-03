@@ -1,0 +1,590 @@
+{
+  "source": {
+    "repo": "https://github.com/open-policy-agent/gatekeeper-library",
+    "commit": "b6c6b501a71bdccbbf3d3dc459c7813c3d681cf4",
+    "date": "2026-09-21"
+  },
+  "templates": [
+    {
+      "name": "k8sallowedrepos",
+      "kind": "K8sAllowedRepos",
+      "title": "Allowed Repositories",
+      "version": "1.0.2",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires container images to begin with a string from the specified list.",
+      "path": "library/general/allowedrepos",
+      "regoFingerprint": "39ed9dfa6da8b4363baa762334bb56f1a19c08195378cd438a795a8725218781"
+    },
+    {
+      "name": "k8sallowedreposv2",
+      "kind": "K8sAllowedReposv2",
+      "title": "Allowed Images",
+      "version": "1.0.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "This policy enforces that container images must begin with a string from a specified list.",
+      "path": "library/general/allowedreposv2",
+      "regoFingerprint": "9deb5a2327e31e97537498d6f2407431349d3b55c3f847de69b55fad832c89f0"
+    },
+    {
+      "name": "k8sblockendpointeditdefaultrole",
+      "kind": "K8sBlockEndpointEditDefaultRole",
+      "title": "Block Endpoint Edit Default Role",
+      "version": "1.0.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Many Kubernetes installations by default have a system:aggregate-to-edit ClusterRole which does not properly restrict access to editing Endpoints.",
+      "path": "library/general/block-endpoint-edit-default-role",
+      "regoFingerprint": "012dc69811cd82f7739ceaf4f551cbcd36c43a94f3eb13727a4b51d31313a59f"
+    },
+    {
+      "name": "k8sblockloadbalancer",
+      "kind": "K8sBlockLoadBalancer",
+      "title": "Block Services with type LoadBalancer",
+      "version": "1.0.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Disallows all Services with type LoadBalancer.",
+      "path": "library/general/block-loadbalancer-services",
+      "regoFingerprint": "0e140790de48199246aa4da4082564ce7f6de3da2baf8ba4101ba7ad771c0a44"
+    },
+    {
+      "name": "k8sblocknodeport",
+      "kind": "K8sBlockNodePort",
+      "title": "Block NodePort",
+      "version": "1.0.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Disallows all Services with type NodePort.",
+      "path": "library/general/block-nodeport-services",
+      "regoFingerprint": "c5819a87201f658b6341fb59b956c95fc8c6855c8cceacea2a58fcc13f105f34"
+    },
+    {
+      "name": "k8sblockwildcardingress",
+      "kind": "K8sBlockWildcardIngress",
+      "title": "Block Wildcard Ingress",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Users should not be able to create Ingresses with a blank or wildcard (*) hostname since that would enable them to intercept traffic for other services in the cluster, even if they don't have access to those services.",
+      "path": "library/general/block-wildcard-ingress",
+      "regoFingerprint": "400bd9171e64727425c8948d80d44982476ddd679b7a6d495aa4b0ac3128fae3"
+    },
+    {
+      "name": "k8scontainerephemeralstoragelimit",
+      "kind": "K8sContainerEphemeralStorageLimit",
+      "title": "Container ephemeral storage limit",
+      "version": "1.0.2",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires containers to have an ephemeral storage limit set and constrains the limit to be within the specified maximum values.",
+      "path": "library/general/ephemeralstoragelimit",
+      "regoFingerprint": "765181e7faff8efcd1bb6516bac62661b5e78f7d899baf5b33e951bab596ed89"
+    },
+    {
+      "name": "k8scontainerlimits",
+      "kind": "K8sContainerLimits",
+      "title": "Container Limits",
+      "version": "1.1.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires containers to have memory and CPU limits set and constrains limits to be within the specified maximum values.",
+      "path": "library/general/containerlimits",
+      "regoFingerprint": "baf15de04be3350b6b62a22e8dac46ffdea513e2567e704029a7aaca59904fa7"
+    },
+    {
+      "name": "k8scontainerratios",
+      "kind": "K8sContainerRatios",
+      "title": "Container Ratios",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Sets a maximum ratio for container resource limits to requests.",
+      "path": "library/general/containerresourceratios",
+      "regoFingerprint": "fd953339d83d1eab06d5603066f07953a97553caf81a152238e283bb5dcbf911"
+    },
+    {
+      "name": "k8scontainerrequests",
+      "kind": "K8sContainerRequests",
+      "title": "Container Requests",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires containers to have memory and CPU requests set and constrains requests to be within the specified maximum values.",
+      "path": "library/general/containerrequests",
+      "regoFingerprint": "f279a8b3def7e95e681acd45fbf248076c8df5011fc3c33c0c1a0f3a69694b50"
+    },
+    {
+      "name": "k8sdisallowanonymous",
+      "kind": "K8sDisallowAnonymous",
+      "title": "Disallow Anonymous Access",
+      "version": "1.1.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Disallows associating ClusterRole and Role resources to the system:anonymous user and system:unauthenticated group.",
+      "path": "library/general/disallowanonymous",
+      "regoFingerprint": "5f00b16ebb4a860c909b8987aa0050bdb0a850277c726a6a71ee9144690302d5"
+    },
+    {
+      "name": "k8sdisallowedrepos",
+      "kind": "K8sDisallowedRepos",
+      "title": "Disallowed Repositories",
+      "version": "1.0.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Disallowed container repositories that begin with a string from the specified list.",
+      "path": "library/general/disallowedrepos",
+      "regoFingerprint": "6758ae54b09e9df1d3d8548793518d680e7f7f2d2f4a01498633febd4b957d25"
+    },
+    {
+      "name": "k8sdisallowedtags",
+      "kind": "K8sDisallowedTags",
+      "title": "Disallow tags",
+      "version": "1.0.2",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires container images to have an image tag different from the ones in the specified list.",
+      "path": "library/general/disallowedtags",
+      "regoFingerprint": "b73e953b987e19448ac36abe7480bc7d1f79f6e2e24c52bc77e17d5f5bb8d9f1"
+    },
+    {
+      "name": "k8sdisallowinteractivetty",
+      "kind": "K8sDisallowInteractiveTTY",
+      "title": "Disallow Interactive TTY Containers",
+      "version": "1.0.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires that objects have the fields `spec.tty` and `spec.stdin` set to false or unset.",
+      "path": "library/general/disallowinteractive",
+      "regoFingerprint": "7e071548bc1d3e632a5acb8bdc34db6e4c71e8d0c1f5fe04bb5b0936a6341d88"
+    },
+    {
+      "name": "k8sexternalips",
+      "kind": "K8sExternalIPs",
+      "title": "External IPs",
+      "version": "1.0.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Restricts Service externalIPs to an allowed list of IP addresses.",
+      "path": "library/general/externalip",
+      "regoFingerprint": "f5daf58ae8eb87a14a9127f160cdd1d045660f1dde89517fb4af0536e0780b9a"
+    },
+    {
+      "name": "k8shorizontalpodautoscaler",
+      "kind": "K8sHorizontalPodAutoscaler",
+      "title": "Horizontal Pod Autoscaler",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": true,
+      "description": "Disallow the following scenarios when deploying `HorizontalPodAutoscalers` 1.",
+      "path": "library/general/horizontalpodautoscaler",
+      "regoFingerprint": "bb7d8f6471af25fe7641f0cbfd0b4954d8734170159d3e5434dec9d0a2636ce2"
+    },
+    {
+      "name": "k8shttpsonly",
+      "kind": "K8sHttpsOnly",
+      "title": "HTTPS Only",
+      "version": "1.0.2",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires Ingress resources to be HTTPS only.",
+      "path": "library/general/httpsonly",
+      "regoFingerprint": "5753d64e9b3a717ba6c85e9c9dcab86b6e23d378a5ee88d8f815800c5c0c6690"
+    },
+    {
+      "name": "k8simagedigests",
+      "kind": "K8sImageDigests",
+      "title": "Image Digests",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires container images to contain a digest.",
+      "path": "library/general/imagedigests",
+      "regoFingerprint": "aac99e87a8db3127e25705d19060d66d9731e7474598de2d05da7b7a62bc5038"
+    },
+    {
+      "name": "k8spoddisruptionbudget",
+      "kind": "K8sPodDisruptionBudget",
+      "title": "Pod Disruption Budget",
+      "version": "1.0.4",
+      "bundles": [],
+      "requiresSyncData": true,
+      "description": "Disallow the following scenarios when deploying PodDisruptionBudgets or resources that implement the replica subresource (e.g.",
+      "path": "library/general/poddisruptionbudget",
+      "regoFingerprint": "5d7c02cfc5ef3e3f220f5c1a38c7265744e25a46783419c8fbe71d1084b56310"
+    },
+    {
+      "name": "k8spspallowedusers",
+      "kind": "K8sPSPAllowedUsers",
+      "title": "Allowed Users",
+      "version": "1.0.3",
+      "bundles": [
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Controls the user and group IDs of the container and some volumes.",
+      "path": "library/pod-security-policy/users",
+      "regoFingerprint": "e4ee81cf34e5d7e4af944a537cc97c77497c11809eb7e8c0aedd291daf70b49f"
+    },
+    {
+      "name": "k8spspallowprivilegeescalationcontainer",
+      "kind": "K8sPSPAllowPrivilegeEscalationContainer",
+      "title": "Allow Privilege Escalation in Container",
+      "version": "1.1.1",
+      "bundles": [
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Controls restricting escalation to root privileges.",
+      "path": "library/pod-security-policy/allow-privilege-escalation",
+      "regoFingerprint": "f2f0b0185161341a2e5c7d14ece7ed1273c150e5b3c849938a7e1c4f94f7a747"
+    },
+    {
+      "name": "k8spspapparmor",
+      "kind": "K8sPSPAppArmor",
+      "title": "App Armor",
+      "version": "1.1.1",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Configures an allow-list of AppArmor profiles for use by containers.",
+      "path": "library/pod-security-policy/apparmor",
+      "regoFingerprint": "51af5f76f4c0bf0b131456ebd1d7e0479c5254159dee5da12914fabcc06fafea"
+    },
+    {
+      "name": "k8spspautomountserviceaccounttokenpod",
+      "kind": "K8sPSPAutomountServiceAccountTokenPod",
+      "title": "Automount Service Account Token for Pod",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Controls the ability of any Pod to enable automountServiceAccountToken.",
+      "path": "library/general/automount-serviceaccount-token",
+      "regoFingerprint": "ebe96bbccdfc3e9c9db5f4207d8ad7181edbbdd0877a2bb6dd8d443757828eba"
+    },
+    {
+      "name": "k8spspcapabilities",
+      "kind": "K8sPSPCapabilities",
+      "title": "Capabilities",
+      "version": "1.1.3",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Controls Linux capabilities on containers.",
+      "path": "library/pod-security-policy/capabilities",
+      "regoFingerprint": "c225abf46a29f3ad2e8dd4e559c5fe4cb4a527a037215b7e3e262d838d012787"
+    },
+    {
+      "name": "k8spspflexvolumes",
+      "kind": "K8sPSPFlexVolumes",
+      "title": "FlexVolumes",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Controls the allowlist of FlexVolume drivers.",
+      "path": "library/pod-security-policy/flexvolume-drivers",
+      "regoFingerprint": "ee51d6ad432b2fc91e00a2c21cb89fead048aa966742f4e18c309be156649f65"
+    },
+    {
+      "name": "k8spspforbiddensysctls",
+      "kind": "K8sPSPForbiddenSysctls",
+      "title": "Forbidden Sysctls",
+      "version": "1.2.1",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Controls the `sysctl` profile used by containers.",
+      "path": "library/pod-security-policy/forbidden-sysctls",
+      "regoFingerprint": "fa9ac4cfc29e0ab07b6e0ac6102c1ab96ff1a921658dc36d80df5141b5262f8a"
+    },
+    {
+      "name": "k8spspfsgroup",
+      "kind": "K8sPSPFSGroup",
+      "title": "FS Group",
+      "version": "1.1.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Controls allocating an FSGroup that owns the Pod's volumes.",
+      "path": "library/pod-security-policy/fsgroup",
+      "regoFingerprint": "51b1d43e6c4e5f7e66a4d42742d9bcd8f562514cdb3e49bb00eff4c006be584b"
+    },
+    {
+      "name": "k8spsphostfilesystem",
+      "kind": "K8sPSPHostFilesystem",
+      "title": "Host Filesystem",
+      "version": "1.1.2",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Controls usage of the host filesystem.",
+      "path": "library/pod-security-policy/host-filesystem",
+      "regoFingerprint": "ed0c0bb8d39d370b0be6627b602dc672facdeeed105f3bc53df3eb06282cfcd9"
+    },
+    {
+      "name": "k8spsphostnamespace",
+      "kind": "K8sPSPHostNamespace",
+      "title": "Host Namespace",
+      "version": "1.1.1",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Disallows sharing of host PID and IPC namespaces by pod containers.",
+      "path": "library/pod-security-policy/host-namespaces",
+      "regoFingerprint": "4c735159cf2af733e9a4059c5528f47a0f07dcab150f1ac6f1922b3fa1b14243"
+    },
+    {
+      "name": "k8spsphostnetworkingports",
+      "kind": "K8sPSPHostNetworkingPorts",
+      "title": "Host Networking Ports",
+      "version": "1.1.5",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Controls usage of host network namespace by pod containers.",
+      "path": "library/pod-security-policy/host-network-ports",
+      "regoFingerprint": "a6491eaf556595918e6714a5a01d9a3a8153653d9811af01fe4157cc6c90cf30"
+    },
+    {
+      "name": "k8spsphostprobeslifecycle",
+      "kind": "K8sPSPHostProbesLifecycle",
+      "title": "Host Probes and Lifecycle Hooks",
+      "version": "1.0.1",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Disallows specifying the host field in probes and lifecycle hooks.",
+      "path": "library/pod-security-policy/host-probes-lifecycle",
+      "regoFingerprint": "90b27285a21a5a66e6013f3b2b71b0bee987a6fbac8d1a5f9e6374a79088a9d5"
+    },
+    {
+      "name": "k8spsphostprocess",
+      "kind": "K8sPSPHostProcess",
+      "title": "Host Process",
+      "version": "1.0.1",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Disallows HostProcess containers for Windows pods.",
+      "path": "library/pod-security-policy/host-process",
+      "regoFingerprint": "ed14b8197d3b3825c7bd7d6b4bce3aefd7217da9e5212c004ab6548e6d481b75"
+    },
+    {
+      "name": "k8spspprivilegedcontainer",
+      "kind": "K8sPSPPrivilegedContainer",
+      "title": "Privileged Container",
+      "version": "1.1.3",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Controls the ability of any container to enable privileged mode.",
+      "path": "library/pod-security-policy/privileged-containers",
+      "regoFingerprint": "e573152b77cae9f1fe83ffd2d1e526c7f25d09a9abe52056e96784f64c79e05e"
+    },
+    {
+      "name": "k8spspprocmount",
+      "kind": "K8sPSPProcMount",
+      "title": "Proc Mount",
+      "version": "1.1.3",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Controls the allowed `procMount` types for the container.",
+      "path": "library/pod-security-policy/proc-mount",
+      "regoFingerprint": "4f9ecaaa75a9106f862953bbfd60b213c19f02cb245717676360e77811c3d74d"
+    },
+    {
+      "name": "k8spspreadonlyrootfilesystem",
+      "kind": "K8sPSPReadOnlyRootFilesystem",
+      "title": "Read Only Root Filesystem",
+      "version": "1.1.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires the use of a read-only root file system by pod containers.",
+      "path": "library/pod-security-policy/read-only-root-filesystem",
+      "regoFingerprint": "dd50a827a25c3f0ffc06072d345562df3084e82a533bdd02576fe0a329e49089"
+    },
+    {
+      "name": "k8spspseccomp",
+      "kind": "K8sPSPSeccomp",
+      "title": "Seccomp",
+      "version": "1.1.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Controls the seccomp profile used by containers.",
+      "path": "library/pod-security-policy/seccomp",
+      "regoFingerprint": "59de41dd61115085362035d26d888ed1ab4c74e12429db8b8659564edfeac4d8"
+    },
+    {
+      "name": "k8spspseccompv2",
+      "kind": "K8sPSPSeccompV2",
+      "title": "Seccomp V2",
+      "version": "1.0.1",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Controls the seccomp profile used by containers.",
+      "path": "library/pod-security-policy/seccompv2",
+      "regoFingerprint": "ed06ddbd880979e7e73031fecb834b843b08fbcd54bb5ec28fe4cc8f2bdfb979"
+    },
+    {
+      "name": "k8spspselinuxv2",
+      "kind": "K8sPSPSELinuxV2",
+      "title": "SELinux V2",
+      "version": "1.0.4",
+      "bundles": [
+        "pod-security-baseline",
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Defines an allow-list of seLinuxOptions configurations for pod containers.",
+      "path": "library/pod-security-policy/selinux",
+      "regoFingerprint": "c453bf309333852d8726d009863c81975313c4bd64c59eee06515b96d655c702"
+    },
+    {
+      "name": "k8spspvolumetypes",
+      "kind": "K8sPSPVolumeTypes",
+      "title": "Volume Types",
+      "version": "1.0.3",
+      "bundles": [
+        "pod-security-restricted"
+      ],
+      "requiresSyncData": false,
+      "description": "Restricts mountable volume types to those specified by the user.",
+      "path": "library/pod-security-policy/volumes",
+      "regoFingerprint": "d05e3a1722b2f3764bc18dd987ab48f181af8e3630579bccda2d68fb5cd7a60d"
+    },
+    {
+      "name": "k8sreplicalimits",
+      "kind": "K8sReplicaLimits",
+      "title": "Replica Limits",
+      "version": "1.0.2",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires that objects with the field `spec.replicas` (Deployments, ReplicaSets, etc.) specify a number of replicas within defined ranges.",
+      "path": "library/general/replicalimits",
+      "regoFingerprint": "6aadabab5483ad2851c73ba857aa8b3443dc5603931b05f9a2a294e93e70f79e"
+    },
+    {
+      "name": "k8srequiredannotations",
+      "kind": "K8sRequiredAnnotations",
+      "title": "Required Annotations",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires resources to contain specified annotations, with values matching provided regular expressions.",
+      "path": "library/general/requiredannotations",
+      "regoFingerprint": "413e9e98e53d00eff1ac7d2ba885a286685c76061fdcb2751549778d917c6bc5"
+    },
+    {
+      "name": "k8srequiredlabels",
+      "kind": "K8sRequiredLabels",
+      "title": "Required Labels",
+      "version": "1.1.2",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires resources to contain specified labels, with values matching provided regular expressions.",
+      "path": "library/general/requiredlabels",
+      "regoFingerprint": "628d7195edaac5677ae0e4e723633427fa210bf90759fd09e91a4dc59514649d"
+    },
+    {
+      "name": "k8srequiredprobes",
+      "kind": "K8sRequiredProbes",
+      "title": "Required Probes",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires Pods to have readiness and/or liveness probes.",
+      "path": "library/general/requiredprobes",
+      "regoFingerprint": "d6e4bbe03b73f7a3d4cd8a79e9ade348a931ffb898e9331333107a45760dd7d4"
+    },
+    {
+      "name": "k8srequiredresources",
+      "kind": "K8sRequiredResources",
+      "title": "Required Resources",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Requires containers to have defined resources set.",
+      "path": "library/general/containerresources",
+      "regoFingerprint": "92ba5d233e44052e33b3aa69afb6936b755bc1a3d143f6a100b5ef848551c9a2"
+    },
+    {
+      "name": "k8sstorageclass",
+      "kind": "K8sStorageClass",
+      "title": "Storage Class",
+      "version": "1.1.2",
+      "bundles": [],
+      "requiresSyncData": true,
+      "description": "Requires storage classes to be specified when used.",
+      "path": "library/general/storageclass",
+      "regoFingerprint": "4748d11941b3bce89be3e0eff6f48620fa3e319d81cab4f472767a35a6599957"
+    },
+    {
+      "name": "k8suniqueingresshost",
+      "kind": "K8sUniqueIngressHost",
+      "title": "Unique Ingress Host",
+      "version": "1.0.4",
+      "bundles": [],
+      "requiresSyncData": true,
+      "description": "Requires all Ingress rule hosts to be unique.",
+      "path": "library/general/uniqueingresshost",
+      "regoFingerprint": "12de75a67d3daba0c8893c1cf8ad30118da9283dfe81a3f3e3e25a768ca1ae80"
+    },
+    {
+      "name": "k8suniqueserviceselector",
+      "kind": "K8sUniqueServiceSelector",
+      "title": "Unique Service Selector",
+      "version": "1.0.2",
+      "bundles": [],
+      "requiresSyncData": true,
+      "description": "Requires Services to have unique selectors within a namespace.",
+      "path": "library/general/uniqueserviceselector",
+      "regoFingerprint": "5a823c0f5101e03b9bb8d974d2f05ee3638d246878d6cd60df7510b215de20bb"
+    },
+    {
+      "name": "noupdateserviceaccount",
+      "kind": "NoUpdateServiceAccount",
+      "title": "Block updating Service Account",
+      "version": "1.0.1",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Blocks updating the service account on resources that abstract over Pods.",
+      "path": "library/general/noupdateserviceaccount",
+      "regoFingerprint": "cae2a0b349f8ad2f55a98ac0dfc9a0d0112a47f5c8c1230d18c71cd10ad8eaa5"
+    },
+    {
+      "name": "verifydeprecatedapi",
+      "kind": "VerifyDeprecatedAPI",
+      "title": "Verify deprecated APIs",
+      "version": "1.0.0",
+      "bundles": [],
+      "requiresSyncData": false,
+      "description": "Verifies deprecated Kubernetes APIs to ensure all the API versions are up to date.",
+      "path": "library/general/verifydeprecatedapi",
+      "regoFingerprint": "0de38ae9a54cd8c5d76ad8e5bd55839c19c80b783046fa08ad092fd6d0558302"
+    }
+  ]
+}

@@ -1,0 +1,146 @@
+schemaVersion: 2.0
+
+# ─── Secrets ───
+# Create these Rio build secrets at rio.apple.com > Project Settings > Secrets.
+# See: https://github.pie.apple.com/CloudTech/awsappleconnect
+#
+# Prerequisites:
+#   1. Create an AppleConnect System Account via AccessManager
+#   2. Grant the system account AWS access + role via AccessManager > AWS Account Access
+#   3. Enroll TOTP on the system account (AppleConnect > Security Credentials > 2SV)
+#   4. Note the TOTP secret key and device ID during enrollment
+#
+# Secret "aws-config" — paste as plain text, no quotes:
+#
+#   [default]
+#   region = us-west-2
+#   credential_process = awsappleconnect -p default
+#
+# Secret "aws-credentials" — paste as plain text, values must NOT be wrapped in quotes:
+#
+#   [default]
+#   appleconnect =
+#       username=<SYSTEM_ACCOUNT_USERNAME>
+#       password=<SYSTEM_ACCOUNT_PASSWORD>
+#       deviceid=<TOTP_DEVICE_ID>
+#       totpsecret=<TOTP_SECRET>
+#       aws_role=developer_role
+#       account_id=637248970961
+#
+# Secret "aws-ecr-credentials":
+#
+#   {
+#     "appleconnect_username": "<system_account_username>",
+#     "appleconnect_password": "<system_account_password>",
+#     "appleconnect_device_id": "<totp_device_id>",
+#     "appleconnect_totp_secret": "<totp_secret>",
+#     "aws_account_id": "637248970961",
+#     "aws_role_name": "<aws_role_from_mascot>"
+#   }
+#
+# Find aws_role and account_id at: https://portal.aws.ais.apple.com/console-access
+# Find deviceid at: AppleConnect > Security Credentials > click (i) on the TOTP device
+
+secrets:
+  names:
+    - aws-config
+    - aws-credentials
+    - aws-ecr-credentials
+
+notify:
+  slack:
+    enabled: true
+    channels:
+      - channel: 'team-platform-foundation-dev'
+        build:
+          onStart: false
+          onSuccess: true
+          onFailure: true
+
+# ─── Defaults ───
+machine:
+  env:
+    DOCKER_BUILDKIT: '1'
+    CODE_VERSION: ${GIT_COMMIT}
+
+# ─── Pipelines ───
+pipelines:
+
+  # Pull Request Build — install deps + build frontend, no publish
+  - name: pr-build
+    branchName: main
+    machine:
+      baseImage: docker.apple.com/base-images/ubi9/node22-builder:latest
+    build:
+      template: freestyle:v4:prb
+      steps:
+        - npm ci
+        - npm test
+        - npm run build
+
+  # ECR Setup — ensure ECR repository exists before any image push.
+  # Runs on the awscli image (the node22-builder image used by app-build does
+  # not have aws cli available), and chains to app-build on success.
+  - name: app-ecr-setup
+    branchName: main
+    machine:
+      baseImage: docker.apple.com/cloudtech/awscli:latest
+    build:
+      template: freestyle:v4:build
+      steps:
+        - source ./scripts/configure_aws_cli.sh
+        - bash scripts/ecr-prepare.sh
+    finally:
+      pipelineChain:
+        - pipeline: app-build
+
+  # App Build — build, publish Docker image to ECR, chain to deploy.
+  # Triggered from app-ecr-setup, not directly on push, so the ECR repo is
+  # guaranteed to exist before this pipeline runs.
+  - name: app-build
+    branchName: main
+    trigger:
+      gitPush: false
+    machine:
+      baseImage: docker.apple.com/base-images/ubi9/node22-builder:latest
+    build:
+      template: freestyle:v4:publish
+      steps:
+        - source ./scripts/configure_aws_cli.sh
+        - npm ci
+        - npm test
+        - npm run build
+    package:
+      dockerfile:
+        - dockerfilePath: Dockerfile
+          context: .
+          version: latest
+          perApplication: false
+          extraTags:
+            - '${CODE_VERSION}'
+          publish:
+            - repo: 637248970961.dkr.ecr.us-west-2.amazonaws.com/btp-kyma-fleet-dashboard
+              credentials:
+                type: apple-aws-docker
+                token: aws-ecr-credentials
+    finally:
+      pipelineChain:
+        - pipeline: app-deploy
+          buildArguments:
+            - name: "IMAGE_TAG"
+              value: "${CODE_VERSION}"
+
+  # App Deploy — update EKS deployment via Helm. Delegates to scripts/helm-deploy.sh
+  # so the helm flags stay identical to `npm run push`.
+  - name: app-deploy
+    branchName: main
+    trigger:
+      gitPush: false
+    machine:
+      baseImage: docker.apple.com/cloudtech/awscli:latest
+    build:
+      template: freestyle:v4:build
+      steps:
+        - source ./scripts/configure_aws_cli.sh
+        - export IMAGE_TAG=$IMAGE_TAG
+        - bash scripts/helm-deploy.sh

@@ -1,0 +1,7 @@
+{
+  "_comment": [
+    "Universal Kyma Fleet Console cluster registry.",
+    "Clusters are onboarded dynamically via the UI (pasting token, uploading cluster-input.json, or kubeconfig) or through the kyma-fleet-clusters Secret."
+  ],
+  "clusters": []
+}

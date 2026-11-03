@@ -1,0 +1,42 @@
+<!doctype html>
+<!--
+  `class="dark"` is the first-paint default, before any JavaScript runs. `initTheme()` in
+  src/main.tsx corrects it from the stored preference in the same task, so a light-theme operator
+  sees at most a pre-layout frame rather than a rendered dark page. Dark is the default here
+  because it is the theme this console was designed in and is used in most.
+-->
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Both schemes, so the browser knows this document supports either. The *active* one is set
+      by `color-scheme` on `html.dark` / `html.light` in theme.css, which is what a runtime
+      toggle can actually change — a meta tag is a load-time declaration and cannot follow it.
+    -->
+    <meta name="color-scheme" content="dark light" />
+    <title>Kyma Fleet Console</title>
+    <!--
+      A static fallback mark so a pinned tab is identifiable before React mounts. The live one is
+      re-drawn per theme by `ThemeToggle` in src/components/ThemeToggle.tsx, which owns the shape;
+      this is the same three linked nodes in the dark-theme colours. Inline SVG rather than a
+      binary .ico so there is no asset to fall out of step with the palette. Keep the two in step:
+      the only thing that differs is the node fill, which here is the dark theme's.
+    -->
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cline x1='16' y1='7' x2='7' y2='25' stroke='%236d5bd0' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='16' y1='7' x2='25' y2='25' stroke='%236d5bd0' stroke-width='3.5' stroke-linecap='round'/%3E%3Cline x1='7' y1='25' x2='25' y2='25' stroke='%236d5bd0' stroke-width='3.5' stroke-linecap='round'/%3E%3Crect x='11.5' y='2.5' width='9' height='9' rx='2.5' fill='%23e6edf3'/%3E%3Crect x='2.5' y='20.5' width='9' height='9' rx='2.5' fill='%23e6edf3'/%3E%3Crect x='20.5' y='20.5' width='9' height='9' rx='2.5' fill='%23e6edf3'/%3E%3C/svg%3E"
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,12 @@
+{
+  "books": [
+    { "id": "bk-001", "title": "The Pragmatic Programmer", "author": "Andy Hunt", "genre": "Software" },
+    { "id": "bk-002", "title": "Clean Code", "author": "Robert C. Martin", "genre": "Software" },
+    { "id": "bk-003", "title": "Designing Data-Intensive Applications", "author": "Martin Kleppmann", "genre": "Software" },
+    { "id": "bk-004", "title": "Sapiens", "author": "Yuval Noah Harari", "genre": "History" },
+    { "id": "bk-005", "title": "Thinking, Fast and Slow", "author": "Daniel Kahneman", "genre": "Psychology" },
+    { "id": "bk-006", "title": "Dune", "author": "Frank Herbert", "genre": "Sci-Fi" },
+    { "id": "bk-007", "title": "Project Hail Mary", "author": "Andy Weir", "genre": "Sci-Fi" },
+    { "id": "bk-008", "title": "The Phoenix Project", "author": "Gene Kim", "genre": "Software" }
+  ]
+}

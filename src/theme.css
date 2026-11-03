@@ -1,0 +1,1912 @@
+@import 'tailwindcss';
+
+/**
+ * Design tokens, verbatim from the Kyma Fleet Console design system.
+ *
+ * The one rule that governs every colour decision below: violet is the brand and never a
+ * status. Accent marks navigation, selection, focus and primary actions; status has its
+ * own reserved four-colour vocabulary. Anything that blurs the two makes a healthy
+ * cluster and a selected row look alike, which is exactly the mistake this app cannot
+ * afford to make.
+ */
+@theme {
+  --color-bg: #0e1116;
+  --color-surface: #161b22;
+  --color-raised: #21262d;
+  --color-line: #30363d;
+
+  --color-text: #e6edf3;
+  --color-muted: #8b949e;
+
+  --color-accent: #6d5bd0;
+  --color-accent-dim: #6d5bd026;
+  /*
+   * The same hue, lightened until it is legible as *text*. `--color-accent` is a fill colour:
+   * on `--color-raised` it measures 2.94:1, so small type set in it fails WCAG AA. This measures
+   * 5.6:1 on the same background. Use it for accent-coloured labels and text buttons; keep
+   * `--color-accent` for fills, borders and rules.
+   */
+  --color-accent-bright: #a78bfa;
+
+  /*
+   * The accent's hover state and the line's hover state, as tokens rather than the raw hexes
+   * they replaced (`hover:bg-[#7d6cd8]` and `hover:border-[#454c56]` in components/ui.tsx).
+   * A hardcoded hover cannot be re-tinted, so in the light theme the button that lightened on
+   * hover against a dark background would have lightened *towards* the background and appeared
+   * to vanish. Both move away from the surface in whichever direction the theme requires.
+   */
+  --color-accent-hover: #7d6cd8;
+  --color-line-strong: #454c56;
+
+  --color-ok: #3fb950;
+  --color-warn: #d29922;
+  --color-bad: #f85149;
+  --color-unknown: #8b949e;
+
+  /*
+   * The architecture graph's node fills and strokes.
+   *
+   * An SVG cannot use the status tokens directly: a `--color-ok` stroke on a `--color-ok` fill
+   * is invisible, so the graph needs a *pair* per tone — a very dark tint to fill with and a
+   * saturated line to draw with. These were five hardcoded hex pairs inside
+   * pages/helm/HelmArchitecture.tsx, which is why the graph was the one surface that could not
+   * follow a theme change.
+   */
+  --graph-ok-fill: #16281d;
+  --graph-ok-stroke: #5eb87a;
+  --graph-warn-fill: #2b2417;
+  --graph-warn-stroke: #d8a24a;
+  --graph-bad-fill: #2b1a1a;
+  --graph-bad-stroke: #d85a5a;
+  --graph-accent-fill: #1e1f33;
+  --graph-accent-stroke: #8b7bd8;
+  --graph-unknown-fill: #1c1f24;
+  --graph-unknown-stroke: #454c56;
+  /* The selected node's ring, and the two type sizes inside a node. */
+  --graph-selected-stroke: #e8eaed;
+  --graph-label: #8b93a1;
+  --graph-text: #e8eaed;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --radius-card: 8px;
+  --radius-pill: 6px;
+  --radius-chip: 4px;
+}
+
+/**
+ * The light theme.
+ *
+ * ## Why this is an override and not a second palette
+ *
+ * Every colour in this application resolves through one of the tokens above — there is not a
+ * single raw hex or `rgba()` anywhere else in `theme.css`, no `dark:` variant in any component,
+ * and the four hardcoded values that did exist (two hover states, the graph fills, the graph
+ * type) were promoted to tokens for exactly this reason. So a theme is a re-binding of about
+ * twenty custom properties, not a parallel design system, and the design rule that governs the
+ * dark theme governs this one unchanged: **violet is the brand and never a status.** The accent
+ * hue is byte-identical across both themes; only the neutrals and the status set move.
+ *
+ * ## Where the values come from
+ *
+ * The dark neutrals and status colours are the Primer dark scale (`#0e1116`, `#161b22`,
+ * `#21262d`, `#30363d`, `#e6edf3`, `#8b949e`, `#3fb950`, `#d29922`, `#f85149`). These are the
+ * corresponding Primer *light* values, so the two themes are two halves of one scale rather than
+ * one scale plus somebody's guess. That matters for status especially: `#3fb950` is engineered
+ * to read as "ok" on a near-black background and measures 1.9:1 on white, which would have made
+ * a healthy cluster the least legible thing on the page.
+ *
+ * ## Measured, not assumed
+ *
+ * Every text token is checked against the surface it is actually used on, because an operator
+ * console that is merely *bright* rather than *legible* is worse than no light theme at all:
+ *
+ *   text    #1c2128 on surface #ffffff   15.3:1    on bg #f6f7f9   14.4:1
+ *   muted   #57606a on surface #ffffff    5.9:1    on raised #eef0f4  5.4:1
+ *   accent-bright #5b48b8 on #ffffff      6.8:1    on raised #eef0f4  6.0:1
+ *   ok      #1a7f37 on #ffffff            5.1:1
+ *   warn    #9a6700 on #ffffff            4.8:1
+ *   bad     #cf222e on #ffffff            4.9:1
+ *   white   on accent #6d5bd0             5.1:1  (so `text-white` on accent fills is unchanged)
+ *
+ * All pass AA for normal text. `--color-accent` stays a fill/border colour in both themes and
+ * `--color-accent-bright` stays the text-legible sibling — in the dark theme that means
+ * *lighter* than the accent, here it means *darker*. Same role, opposite direction.
+ *
+ * ## Specificity
+ *
+ * `@theme` emits its variables on `:root` (0,1,0). `html.light` is (0,1,1) and therefore wins
+ * regardless of source order, which is why this is safe to keep next to the block it overrides
+ * instead of having to be the last thing in the file.
+ */
+html.light {
+  --color-bg: #f6f7f9;
+  --color-surface: #ffffff;
+  --color-raised: #eef0f4;
+  --color-line: #d6dae1;
+
+  --color-text: #1c2128;
+  --color-muted: #57606a;
+
+  /* Unchanged — the brand does not have a light and a dark variant. */
+  --color-accent: #6d5bd0;
+  /* Slightly stronger than the dark theme's 0x26 alpha: the same violet at 15% reads as almost
+     nothing over white, where over #0e1116 it was a visible wash. */
+  --color-accent-dim: #6d5bd01f;
+  --color-accent-bright: #5b48b8;
+  --color-accent-hover: #5b48b8;
+  --color-line-strong: #b8bec7;
+
+  --color-ok: #1a7f37;
+  --color-warn: #9a6700;
+  --color-bad: #cf222e;
+  --color-unknown: #57606a;
+
+  /* Fills become pale tints of the tone and strokes stay saturated — the same
+     light-fill/strong-stroke relationship as the dark theme, mirrored. */
+  --graph-ok-fill: #e6f5ea;
+  --graph-ok-stroke: #2da44e;
+  --graph-warn-fill: #fdf6e3;
+  --graph-warn-stroke: #bf8700;
+  --graph-bad-fill: #ffebe9;
+  --graph-bad-stroke: #cf222e;
+  --graph-accent-fill: #f0edfb;
+  --graph-accent-stroke: #6d5bd0;
+  --graph-unknown-fill: #f0f2f5;
+  --graph-unknown-stroke: #8c959f;
+  --graph-selected-stroke: #1c2128;
+  --graph-label: #57606a;
+  --graph-text: #1c2128;
+
+  /* Tells the browser to render form controls, the caret and the default scrollbar light. Set
+     on the element rather than only in the <meta>, because the meta tag is a document-load
+     default and cannot follow a runtime toggle. */
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Identifiers are monospace everywhere — the single most important legibility
+     decision in the product. Cluster ids, namespaces, pod names, images, durations. */
+  .mono {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    letter-spacing: -0.01em;
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  /*
+   * Centred: a compact indicator whose values are all about the same width.
+   *
+   * Not for status. A status cell here holds a pill reading anything from `Running` to
+   * `CreateContainerConfigError`, and centring content of wildly different widths ragged the left and
+   * the right edge at once — worse to scan down a column than either alignment. See align.ts.
+   */
+  .ctr {
+    text-align: center;
+  }
+
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  /* Keyboard focus must always be visible; this app is used by people who live on the
+     keyboard and it is the only affordance that survives a screen reader. */
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/*
+ * The detail panel's width, as a share of the viewport, per band.
+ *
+ * A fraction rather than a pixel count, because a drawer's job is to hold a resource's detail
+ * legibly and the amount of detail does not shrink when the screen does — a 400px panel that
+ * read well at 1280 is a cramped 26% at 1536. The bands:
+ *
+ *   <1024      100%   full-width overlay; there is no room to sit beside anything
+ *   1024–1199   53%   overlay over a scrim
+ *   1200–1439   46%   inline, taking space from the content column
+ *   >=1440      40%   inline
+ *
+ * The narrower content column this leaves is exactly what the column-priority queries below
+ * exist for: they measure the table's own container, so the lowest-priority columns shed
+ * automatically instead of clipping off the right edge. `DetailPanel` reads this property, and
+ * `INLINE_VIEWPORT` in components/layout.tsx must stay in step with the 1200px switch.
+ */
+:root {
+  --panel-w: 100%;
+
+  /*
+   * The sidebar's width, owned by the app shell.
+   *
+   * Declared here and NOT inside `@layer components`, because it is written at runtime from an
+   * inline style on the shell element: a custom property declared inside a cascade layer is still
+   * beaten by an inline style, but this also has to resolve to something sane on the very first
+   * paint — before React has mounted and before localStorage has been read — and a layered
+   * declaration is the wrong place to promise that.
+   *
+   * The value below is the same DEFAULT_WIDTH that `useSidebarWidth` in components/layout.tsx
+   * clamps to; the two must stay in step. Everything downstream reads the property rather than
+   * the number, so the drag handle only ever writes one place.
+   */
+  --sidebar-w: 240px;
+
+  /*
+   * The content gutter — the ONE horizontal inset every page-level surface uses.
+   *
+   * Before this there were four: the page header sat at 24px (`px-6`), a Section heading at 28px
+   * (`px-6` plus its own `px-1`), a card-wrapped table's first column at 32px (card `p-5` plus the
+   * cell's 12px) and a bare table's at 36px. Four edges down the left of one screen, none of them
+   * agreeing, which is what made every table look nudged relative to the heading naming it.
+   *
+   * Everything now reads this property: `.page-x` for headers, sub-tab strips, filter bars and card
+   * grids, and the flush first/last table cell below so a column of values starts exactly where the
+   * heading above it starts. Change the inset here and the whole console moves together.
+   */
+  --page-x: 24px;
+}
+/*
+ * Narrow viewports get a tighter gutter — 24px of each edge is 7.5% of a 320px screen. This is the
+ * only place the number varies, and it varies for every surface at once.
+ */
+@media (max-width: 640px) {
+  :root {
+    --page-x: 16px;
+  }
+}
+@media (min-width: 1024px) {
+  :root {
+    --panel-w: 53%;
+  }
+}
+@media (min-width: 1200px) {
+  :root {
+    --panel-w: 46%;
+  }
+}
+@media (min-width: 1440px) {
+  :root {
+    --panel-w: 40%;
+  }
+}
+
+@layer components {
+  /*
+   * The app shell.
+   *
+   * A grid, not a flex row, and the reason is `minmax(0, 1fr)` on the content track. A flex
+   * child's default `min-width: auto` lets a wide table push the whole row wider than the
+   * viewport, which is how the sidebar used to get shoved off-screen by the Nodes table instead
+   * of the table scrolling inside its own `.table-wrap`. A grid track that is explicitly allowed
+   * to shrink to zero cannot be pushed, so overflow stays where it belongs — inside the table.
+   *
+   * Below `lg` the sidebar is `display: none` (see `Rail`), so the shell falls back to a single
+   * flex column and the content gets the whole viewport; `ClusterSectionStrip` carries navigation
+   * there. Applying the grid only from `lg` keeps a zero-width first track from existing at all.
+   *
+   * The width transition is on the grid template rather than on the custom property: a bare
+   * custom property is not interpolable without `@property`, and registering one buys nothing
+   * here. `[data-sidebar-dragging='true']` kills it — during a drag the pointer IS the animation,
+   * and a 150ms ease behind it reads as lag.
+   */
+  .app-shell {
+    display: flex;
+    height: 100%;
+  }
+  @media (min-width: 1024px) {
+    .app-shell {
+      display: grid;
+      grid-template-columns: var(--sidebar-w) minmax(0, 1fr);
+      /*
+       * One row, and it must be told so. A grid row is `auto` by default, which means it sizes to
+       * its tallest child — so the 3400px Workloads table made the row 3400px, the sidebar
+       * stretched to match, and its `position: sticky` internals scrolled away with the page. The
+       * old flex row never had this problem because a flex item stretches to the *container*.
+       * `minmax(0, 1fr)` against a container that is `height: 100%` pins the row to the viewport
+       * and puts the overflow back inside the panes, where each one already handles it.
+       */
+      grid-template-rows: minmax(0, 1fr);
+      transition: grid-template-columns 150ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .app-shell[data-sidebar-dragging='true'] {
+      transition: none;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .app-shell {
+      transition: none;
+    }
+  }
+
+  /*
+   * Room for the pod logs drawer.
+   *
+   * The drawer is `position: fixed` over the bottom of the content column, so it takes no space in
+   * layout — which is exactly why the bottom of the page used to become unreachable: the scroll
+   * container still ended where it always did, and a 498px drawer sat on top of the last 498px of
+   * content with no way to scroll it clear. Measured on the Nodes tab, the final Scheduled-pods rows
+   * could not be brought into view at all while the drawer was open.
+   *
+   * `PodLogsDrawer` publishes its live height as `--pod-logs-h` on `:root` and sets the attribute
+   * that scopes this rule, so the reserved space tracks a resize drag and disappears with the drawer.
+   * `main > *` is the page's own scroll container on every route (the pages each render one as their
+   * root), and block-end padding on a scroll container is part of its scrollable overflow — which is
+   * the whole point: the operator can now scroll the last row above the drawer's top edge.
+   */
+  :root[data-pod-logs='open'] main > * {
+    padding-bottom: var(--pod-logs-h, 0px);
+  }
+
+  /*
+   * The sidebar's resize handle.
+   *
+   * 7px of hit area straddling the 1px border, which is the smallest target that is reliably
+   * grabbable with a trackpad and still narrow enough that it never eats a click meant for a nav
+   * item. `col-resize` is scoped to the handle alone — setting it on the sidebar or on `body`
+   * for the duration of a drag was the first attempt and it made every surface in the app look
+   * draggable the moment the pointer left the handle.
+   *
+   * It only exists from `lg`, because below that the sidebar does not.
+   */
+  .sidebar-handle {
+    display: none;
+  }
+  @media (min-width: 1024px) {
+    .sidebar-handle {
+      display: block;
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      right: -3px;
+      width: 7px;
+      z-index: 20;
+      cursor: col-resize;
+      background: transparent;
+      border: 0;
+      padding: 0;
+      touch-action: none;
+    }
+    .sidebar-handle::after {
+      content: '';
+      position: absolute;
+      inset-block: 0;
+      left: 3px;
+      width: 1px;
+      background: transparent;
+      transition: background 120ms linear;
+    }
+    .sidebar-handle:hover::after,
+    .sidebar-handle:focus-visible::after,
+    .sidebar-handle[data-dragging='true']::after {
+      background: var(--color-accent);
+    }
+    /* The outline would otherwise draw a 7px-wide sliver over the table's first column. */
+    .sidebar-handle:focus-visible {
+      outline: none;
+    }
+    .sidebar-handle:focus-visible::after {
+      width: 3px;
+      left: 2px;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .sidebar-handle::after {
+      transition: none;
+    }
+  }
+
+  .card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-card);
+  }
+
+  /*
+   * The content container. One class, one gutter, every page-level surface.
+   *
+   * Used by `PageHeader`, `PageBody`, the mobile section strip, the sub-tab strips, the filter bars
+   * and the card grids — see components/layout.tsx. It is deliberately padding-only and carries no
+   * max-width: an operator console is read at whatever width the operator gave it, and centring the
+   * content in a 1600px column would waste the space they widened the window to get.
+   *
+   * `padding-inline`, not `padding-left/right`, so a right-to-left locale mirrors for free.
+   */
+  .page-x {
+    padding-inline: var(--page-x);
+  }
+
+  /*
+   * A card is one nesting level in, and its own inset is the same token — so a table inside a card
+   * aligns with the card's title exactly as a table on the page aligns with the page heading. Two
+   * classes rather than one because the header needs the inline inset only; the divider draws the
+   * horizontal edge and padding above it would leave a gap.
+   */
+  .card-head {
+    padding-inline: var(--page-x);
+  }
+  .card-body {
+    padding: var(--page-x);
+  }
+  /*
+   * The table-only card: the divider and the row separators run the full width of the card, and the
+   * cells take their inline inset from the card's own gutter so the first column still starts under
+   * the card title. This is the one place the flush rule is overridden, and it is overridden *to*
+   * the same token rather than away from it.
+   */
+  .card-body-flush {
+    padding-block: var(--page-x);
+  }
+  .card-body-flush .tbl thead th:first-child,
+  .card-body-flush .tbl tbody td:first-child {
+    padding-inline-start: var(--page-x);
+  }
+  .card-body-flush .tbl thead th:last-child,
+  .card-body-flush .tbl tbody td:last-child {
+    padding-inline-end: var(--page-x);
+  }
+
+  /*
+   * A panel header written by hand rather than by `Card` — a title with a sentence under it, or a
+   * title with a control on the right, neither of which fits `Card`'s single 52px row.
+   *
+   * It exists because ten of these had been hand-rolled with `px-5`, `px-4` and `px-3`, so a panel's
+   * own title sat 20, 16 or 12px in while the table beneath it started at 0: measured on Modules &
+   * Telemetry → Platform Integrity, the heading was at x=260 and its first column at x=240. The
+   * inline inset is the same token as everything else; only the block padding is the caller's, since
+   * a one-line header and a two-line one want different heights.
+   */
+  .panel-head {
+    padding-inline: var(--page-x);
+    border-block-end: 1px solid var(--color-line);
+  }
+
+  /*
+   * The inside of a panel: a list row, a toolbar, a log body, a footer — anything that must line up
+   * with the panel's own title but is not the page gutter.
+   *
+   * Same value as `.page-x`, deliberately a different name. The page gutter is applied once, by the
+   * page shell, and a component that reaches for `.page-x` inside a shell that already has it doubles
+   * the inset — which is exactly what five cluster tabs did. Naming the two cases apart is what lets
+   * the test forbid one of them without forbidding the other.
+   */
+  .panel-x {
+    padding-inline: var(--page-x);
+  }
+  /* A flush card body mixing tables and prose: the tables inset their own cells, everything else takes the panel inset. */
+  .panel-x-children > :not(.table-block) {
+    padding-inline: var(--page-x);
+  }
+
+  /*
+   * Column caps: three widths, applied to a `th` and its `td` together.
+   *
+   * `table-layout: auto` treats a header's width as a suggestion that the widest cell overrides, so a
+   * cap only holds when both cells carry it — this is why these are classes rather than a `width` on
+   * the header. Without them a single long value sets the column: measured at a 1280px viewport, one
+   * `APIService` name took 369px of a 1005px container and a `Target Workload` took 437px of 1017,
+   * which is what pushed five tables into a horizontal scroll of 20–494px.
+   *
+   * Truncating hides characters, so a capped cell must also be hoverable: pair these with `CellList`
+   * or an explicit `title`. A value that cannot be read at all is worse than a scrollbar.
+   */
+  .cap-sm,
+  .cap-md,
+  .cap-lg {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cap-sm {
+    max-width: 140px;
+  }
+  .cap-md {
+    max-width: 200px;
+  }
+  .cap-lg {
+    max-width: 260px;
+  }
+
+  /*
+   * The active marker on an icon-rail tile.
+   *
+   * A 3px bar on the sidebar's own left border, not a border on the tile: the rail is a column of
+   * eleven 32px squares, and telling one filled square from ten unfilled ones is a colour
+   * judgement made in peripheral vision. The bar breaks the column's left line, which is the one
+   * thing the eye finds without looking for it. It is `aria-hidden` and purely additive —
+   * `aria-current` and the filled tile carry the state on their own.
+   *
+   * The tile is centred in a 60px rail (60 - 32) / 2 = 14, so -14px lands exactly on the border.
+   */
+  .rail-edge {
+    position: absolute;
+    left: -14px;
+    top: 50%;
+    height: 18px;
+    width: 3px;
+    transform: translateY(-50%);
+    border-radius: 0 2px 2px 0;
+    background: var(--color-accent);
+  }
+
+  /* Tables: 36px header, 44px rows, separators on, striping off, whole row clickable. */  .tbl {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .tbl thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    height: 36px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-line);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    text-align: left;
+    padding: 10px 16px;
+    white-space: nowrap;
+  }
+  /*
+   * The header follows its column's alignment — the rule the rest of the system already assumed.
+   *
+   * `DataTable` puts the same `num`/`ctr` class on the `th` and the `td`, so this looked handled and
+   * measured as broken: `.num { text-align: right }` is declared in `@layer base` and
+   * `.tbl thead th { text-align: left }` two layers later in `@layer components`, and a later cascade
+   * layer wins outright — specificity is not consulted across layers. So every right- and
+   * centre-aligned column whose header is *not* a sort button rendered its label hard left above a
+   * column of right-aligned digits. Sortable columns escaped it by accident: their label is a flex
+   * `.th-sort` button, and `.num .th-sort { justify-content: flex-end }` is a different property.
+   *
+   * Measured on the Security tab before the fix: `PODS`, `POLICIES` and `UNSELECTED PODS` all
+   * computed `left` on the `th` and `right` on the `td`. `test/fleet/table-css-alignment.test.js`
+   * keeps them together.
+   */
+  .tbl thead th.num {
+    text-align: right;
+  }
+  .tbl thead th.ctr {
+    text-align: center;
+  }
+  .tbl tbody td {
+    height: 44px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--color-line);
+    white-space: nowrap;
+  }
+  /*
+   * A compound metric puts its separator on a column of its own.
+   *
+   * `9m / 500m` right-aligned as one string aligns the *last digit* and nothing else, so the `/`
+   * lands wherever the two operands' widths put it. Measured on the Workloads table: the slash
+   * moved across 25px in CPU and 50px in memory down a single screenful of rows, which reads as a
+   * ragged table even though every cell is flush right.
+   *
+   * `1fr auto 1fr` spans the cell and pins the separator to the same x on every row: the left
+   * operand is flush against it, the right one reads away from it. A paired column is therefore
+   * `align: 'center'` — the header centres over the separator, which is the column's real axis.
+   *
+   * `min-width: 0` on both operands is load-bearing: a grid item's default `min-width: auto` is its
+   * content size, so without it a long value widens its track and pushes the separator instead of
+   * ellipsising. `tabular-nums` keeps digit cells equal so the operands themselves do not shimmer
+   * between polls.
+   */
+  .pair {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: baseline;
+    column-gap: 6px;
+    width: 100%;
+    font-variant-numeric: tabular-nums;
+  }
+  .pair-a,
+  .pair-b {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .pair-a {
+    text-align: right;
+  }
+  .pair-b {
+    text-align: left;
+  }
+  .pair-sep {
+    color: var(--color-muted);
+  }
+
+  /*
+   * The pointer cursor belongs to a row that actually does something.
+   *
+   * It used to be on every `tbody tr`, which was true while the only tables in the console were
+   * `DataTable`s with an `onSelect`. It stopped being true the moment thirty-one hand-rolled tables
+   * were folded into this class: a read-only APIRule row that shows a pointer promises a click that
+   * does nothing. `DataTable` already sets `role="button"` exactly when `onSelect` is passed, which
+   * makes the affordance and the behaviour the same fact.
+   */
+  .tbl tbody tr[role='button'] {
+    cursor: pointer;
+  }
+
+  /*
+   * The flush outer edge — what makes a table line up with the heading that names it.
+   *
+   * Every cell carries 12px of inline padding, which is right *between* columns and wrong at the two
+   * ends: it inset the first column's values 12px from the container's content edge, so the page
+   * heading, the sub-tabs, the filter bar and the card title all sat on one line down the left and
+   * the table's own column of values sat on another. Zeroing the outer half of the outer cells is
+   * the whole fix, and it is applied to `thead` and `tbody` in the same rule so a header can never
+   * drift from the column under it.
+   *
+   * It reduces every table's intrinsic width by 24px, so it can only ever make an existing shed
+   * threshold safer, never tighter — the tiers below were measured with the padding still there.
+   *
+   * `:first-child`/`:last-child` rather than a class, because a shed column changes which cell is
+   * visually last on every container resize and no React prop can keep up with that. Note this is
+   * position, not visibility: when the lowest-priority column is `display: none` it is still the
+   * last child, so the padding lands on a hidden cell and the visible last column keeps its 12px.
+   * That is deliberate — a shed column means the table is tight, and 12px of right padding at the
+   * edge of a horizontally scrolling table is the correct look, not a bug.
+   */
+  .tbl thead th:first-child,
+  .tbl tbody td:first-child {
+    padding-inline-start: 0;
+  }
+  .tbl thead th:last-child,
+  .tbl tbody td:last-child {
+    padding-inline-end: 0;
+  }
+  .tbl tbody tr:hover td {
+    background: var(--color-raised);
+  }
+  .tbl tbody tr[data-selected='true'] td {
+    background: var(--color-raised);
+  }
+  /*
+   * The selected row's accent bar, drawn in the gutter left of the first cell.
+   *
+   * It used to be `box-shadow: inset 3px 0 0` on the first cell, and the flush-edge rule above gives
+   * that cell no start padding — so the bar painted over the first glyph ("module rma" read "odule
+   * rma"). Padding the first cell would move every table's first column off the heading line and
+   * change the width arithmetic, so the bar moves out instead, into `.table-wrap`'s 8px gutter: that
+   * gutter is the wrap's own padding, so its `overflow-x: auto` paints what lands there.
+   *
+   * Two outer shadows, top layer first: the row's own tint over the 5px next to the text, then the
+   * 3px accent bar beyond it. The tint makes the air read as part of the selected row on any backdrop.
+   * Not a pseudo-element, for two measured reasons: a capped first column carries `overflow-hidden`,
+   * which clips the cell's own `::before`, and an absolute `tr::before` made Chromium insert an
+   * anonymous cell, a blank column in front of the selected row. A cell's own shadow is clipped by
+   * neither. It also replaces the pinned cell's gutter mask (same property) while selected.
+   *
+   * `.card-body-flush` cells carry `--page-x` of start padding and have no gutter, so there the inset
+   * bar stays.
+   */
+  .tbl tbody tr[data-selected='true'] td:first-child {
+    box-shadow: -5px 0 0 var(--color-raised), -8px 0 0 var(--color-accent);
+  }
+  .card-body-flush .tbl tbody tr[data-selected='true'] td:first-child {
+    box-shadow: inset 3px 0 0 var(--color-accent);
+  }
+
+  /* The first column stays put when a narrow viewport forces horizontal scrolling, so a
+     row is never anonymous — you can always tell which cluster or workload you're on. */
+  .tbl .pin {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    background: var(--color-surface);
+    /* Masks `.table-wrap`'s 8px gutter while the table scrolls sideways, or the cells sliding under
+       the pinned column show through the strip left of it. A selected row's bar replaces it. */
+    box-shadow: -8px 0 0 var(--color-surface);
+  }
+  /*
+   * The pinned HEADER cell is sticky in both axes, and it has to outrank both neighbours it
+   * slides past. `.tbl .pin`'s class selector beats `.tbl thead th`'s element selector, so the
+   * pinned th inherited z-index 1 and scrolled UNDER the other header cells (z-index 2): the
+   * first column's header vanished behind "Status" the moment a wide table scrolled sideways,
+   * while its body cells stayed correctly on top. One rule, and it must stay above both.
+   */
+  .tbl thead th.pin {
+    z-index: 3;
+  }
+  .tbl tbody tr:hover .pin,
+  .tbl tbody tr[data-selected='true'] .pin {
+    background: var(--color-raised);
+  }
+
+  /*
+   * A group's spanning row, inside the same table as its rows.
+   *
+   * `DataTable`'s `groupOf` renders one `<th colSpan>` per bucket rather than one table per bucket,
+   * so every group shares the column edges the header declared. Styled apart from `thead th`
+   * deliberately: it is a label in the flow of the body, not a second header — no uppercase, no
+   * letter-spacing, no sticky, and shorter than a data row so a run of small groups does not read
+   * as a table of headings.
+   */
+  .tbl tbody tr.tbl-group th {
+    height: 30px;
+    padding: 0 12px;
+    background: var(--color-raised);
+    border-bottom: 1px solid var(--color-line);
+    text-align: left;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  /* It is its own first and last child, so both outer padding rules would zero both ends and the
+     label would sit flush against the table's left edge — which is right, and stated here because
+     the generic rules only name `td`. */
+  .tbl tbody tr.tbl-group th:first-child {
+    padding-inline-start: 0;
+  }
+  /* A group row has no `td`, so the row-hover rule cannot reach it; keeping its background constant
+     is also what makes the pointer crossing it read as "not a row you can open". */
+
+  /*
+   * The expandable row's chevron column, and the detail row it opens.
+   *
+   * The column is fixed at 28px and outside the `Column` set — no stored width, no drag, no shed —
+   * so it is stated here rather than through `size()`. `width` on a `table-layout: auto` table is a
+   * suggestion the widest cell overrides, and the widest cell here is a 12px glyph, so it holds.
+   */
+  .tbl .tbl-expand {
+    width: 28px;
+    padding: 0;
+    text-align: center;
+    vertical-align: middle;
+  }
+  .tbl-expand-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 2px;
+    color: var(--color-muted);
+    cursor: pointer;
+  }
+  .tbl-expand-btn:hover {
+    color: var(--color-text);
+  }
+  .tbl-expand-btn:focus-visible {
+    outline: 1px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+  /* MOTION_INTENSITY 3: the chevron turns, nothing else moves. The panel itself appears at once —
+     an animated height on a row that can hold a dozen container meters is a reflow per frame. */
+  .tbl-expand-btn span {
+    transition: transform 120ms ease;
+  }
+  .tbl-expand-btn span[data-open='true'] {
+    transform: rotate(90deg);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .tbl-expand-btn span {
+      transition: none;
+    }
+  }
+  /*
+   * The detail row belongs to the row above it, and has to read that way: raised background, no
+   * hover response of its own, and the left inset that marks it as subordinate rather than a sibling.
+   */
+  .tbl tbody tr.tbl-detail td {
+    padding: 12px 16px 16px 28px;
+    background: var(--color-raised);
+    border-bottom: 1px solid var(--color-line);
+    vertical-align: top;
+    white-space: normal;
+  }
+  .tbl tbody tr.tbl-detail:hover td {
+    background: var(--color-raised);
+  }
+
+  /*
+   * A capped cell whose value sits inside a wrapper still has to show the ellipsis.
+   *
+   * `text-overflow` applies to the box that does the clipping, and on a cell like the Node column —
+   * a `Ready` pill beside the node name in a flex row — that box is the cell while the text lives two
+   * levels down. The result was a name sheared off mid-character with no ellipsis and no signal that
+   * anything had been cut: `ip-10-250-132-233.ec2.i`, which reads like a real name rather than a
+   * truncated one. Making the inner element the clipping box is the fix, and `min-width: 0` is what
+   * lets a flex child shrink below its content width at all.
+   */
+  .tbl td.overflow-hidden > .flex,
+  .tbl th.overflow-hidden > .flex {
+    min-width: 0;
+  }
+  .tbl td.overflow-hidden .mono,
+  .tbl td.overflow-hidden > a,
+  .tbl td.overflow-hidden > span:not(.inline-flex) {
+    display: inline-block;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: bottom;
+  }
+  /* In wrap mode the same cell spends its ceiling on two lines instead of one ellipsis. */
+  .tbl[data-rows='wrap'] td.overflow-hidden .mono {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /*
+   * ---------------------------------------------------------------- table interaction
+   *
+   * Resize, sort and wrap. All three are affordances on the header, so they share one rule about
+   * being quiet: the header is 36px of uppercase 12px muted text, and a control that announces itself
+   * louder than that turns the table's own column names into the second thing the eye finds.
+   */
+
+  /*
+   * The drag handle: an 8px strip on the inside of the column's right edge.
+   *
+   * Inside rather than straddling, because a capped header carries `overflow: hidden` and would clip a
+   * handle that hung past its box. `position: sticky` on the header is already a containing block for
+   * it, so no extra `position: relative` is needed. Invisible until the header is hovered, then a 1px
+   * accent line — the affordance a spreadsheet uses, which is what an operator is already trained on.
+   * `touch-action: none` is what makes the pointer events arrive as a drag instead of being swallowed
+   * by the page's own scrolling.
+   */
+  .col-resize {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 4;
+  }
+  .tbl thead th:hover .col-resize::after,
+  .col-resize:active::after {
+    content: '';
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    right: 3px;
+    width: 1px;
+    background: var(--color-accent);
+    opacity: 0.55;
+  }
+
+  /*
+   * A sortable header is a button, and it inherits the header's own type rather than looking like a
+   * control dropped into it. The indicator is always present — a `↕` on an unsorted column is what
+   * tells the operator the column *can* sort, and reserving its width stops the header text shifting
+   * sideways when the arrow changes.
+   */
+  .th-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    cursor: pointer;
+    max-width: 100%;
+  }
+  .th-sort:hover {
+    color: var(--color-text);
+  }
+  .num .th-sort {
+    /* A right-aligned column's button has to hug the right edge, or the header leaves the
+       cells below it. The sort mark goes on the label's inner side (row-reverse) so the label's
+       last letter, not the mark, sits on the numbers' edge — with the mark trailing, every sortable
+       numeric label ended 12px short of its digits (measured on 40+ columns, 2026-09-27).
+       `flex-start` because row-reverse puts main-start on the right. */
+    justify-content: flex-start;
+    flex-direction: row-reverse;
+    width: 100%;
+  }
+  .ctr .th-sort {
+    justify-content: center;
+    width: 100%;
+  }
+  /* A full-width button pushes the InfoTip after it into the cell's 16px end padding: 3px of gap
+     plus the 13px icon fit exactly, so the label keeps the numbers' edge and nothing spills. With
+     the default 5px it overflowed 2px, and at 1100px the last visible column widened the table
+     (TLS & Listeners, 812/810, 2026-09-26). */
+  .num .th-sort + .infotip,
+  .ctr .th-sort + .infotip {
+    margin-inline-start: 3px;
+  }
+  .th-sort-mark {
+    font-size: 9px;
+    opacity: 0.45;
+  }
+  [aria-sort] .th-sort-mark {
+    opacity: 1;
+    color: var(--color-accent);
+  }
+
+  /*
+   * Wrap-names mode: the second row height this console offers.
+   *
+   * Kubernetes names are long enough that an ellipsis plus a hover tooltip is sometimes not enough —
+   * comparing two pods of the same ReplicaSet means reading the suffix, and hovering each row in turn
+   * to do it is not reading a table. In this mode the name takes up to two lines and the row grows;
+   * every other cell centres vertically so a two-line name does not leave its neighbours floating at
+   * the top. Two lines, not unlimited: a 40-row table where each row is four lines tall is a list.
+   */
+  .tbl[data-rows='wrap'] tbody td {
+    height: auto;
+    min-height: 44px;
+    padding-block: 9px;
+    white-space: normal;
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+  }
+  .tbl[data-rows='wrap'] tbody td.overflow-hidden {
+    /* A ceiling column still has one — it just spends it on two lines instead of one. */
+    text-overflow: ellipsis;
+  }
+  /*
+   * The clamp goes on the element that holds the text, never on the `td` itself.
+   *
+   * Setting `display` on a table cell takes it out of the table's own layout: a `td` with
+   * `display: -webkit-box` stops being a cell, and the column it belonged to loses the alignment with
+   * the header above it that this whole file exists to guarantee. The name in these cells is a
+   * `<span class="truncate">` inside `ResourceLink`, and its `nowrap` is exactly what has to lift for
+   * a second line to be possible at all.
+   */
+  .tbl[data-rows='wrap'] tbody td .truncate,
+  .tbl[data-rows='wrap'] tbody td .mono {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    white-space: normal;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
+  }
+
+  /*
+   * The toolbar above a table. Right-aligned over the table's own right edge, 12px muted, and in the
+   * same place on every table in the console so it is learned once.
+   *
+   * Hidden until the pointer is over the table or something in it has focus. A Helm release page
+   * stacks six tables, and six permanently visible control rows made the toolbar the texture of the
+   * page instead of a control on it. `pointer-events: none` while hidden so an invisible button cannot
+   * be clicked by accident; focus still reaches it from the keyboard, and `:focus-within` then reveals
+   * it. A table whose preferences are no longer the default keeps its toolbar visible — a hidden column
+   * must always have a visible way back.
+   */
+  .table-block {
+    display: block;
+    min-width: 0;
+  }
+  .table-tools {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 4px;
+    min-height: 22px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+  }
+  .table-block:hover .table-tools,
+  .table-block:focus-within .table-tools,
+  .table-tools[data-dirty],
+  .table-tools:has([aria-expanded='true']) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .table-tools {
+      transition: none;
+    }
+  }
+  /*
+   * Directly under a FilterBar or a Section heading, the toolbar row pulls up into the margin above
+   * it and drops to 18px. Stacked, the two made a dead band: measured on OPA Native policies, the
+   * FilterBar's divider sat 40px above the header (12px margin + 28px of reserved toolbar), and 36px
+   * under the "highest risk first" hint on OPA Overview. The negative top margin collapses with the
+   * one above — through `.table-block`, which has no padding or border — leaving 2px under a divider
+   * and none under a heading, so the header lands 20px and 18px below. Everywhere else the toolbar
+   * keeps its full row.
+   */
+  .filter-bar + .table-block > .table-tools,
+  .section-head + .table-block > .table-tools {
+    margin-top: -10px;
+    margin-bottom: 0;
+    min-height: 18px;
+  }
+  .section-head + .table-block > .table-tools {
+    margin-top: -8px;
+  }
+  /*
+   * First table in an IngressCard body: the same collapse, pulled up through the body's 6px top
+   * padding. Measured 2026-09-26 on TLS & Listeners: 32px of blank band under the card header on
+   * tables with a toolbar, none on the 3-column ones without — two spacings for one card.
+   */
+  .panel-x-children > .table-block:first-child > .table-tools {
+    margin-top: -6px;
+    margin-bottom: 0;
+    min-height: 18px;
+  }
+  /*
+   * First table in a card body: the body gives up its top padding and the toolbar drops to 18px, so
+   * the header lands 18px under the card title — the same as the IngressCard rule above. Measured
+   * 2026-09-27: the body's 24px padding plus the hidden 22px toolbar row left a 52px blank band under
+   * the title on Clusters, Nodes, All Workloads, Helm Releases, Node spend, Authorization Posture and
+   * Kyma Modules, and 18px
+   * on every Traffic panel. Only a body whose first table has a toolbar gives up its padding: a
+   * table without one fell flush against the title (Sidecar Coverage, APIService Availability,
+   * Prometheus-Operator, 24px → 0). IngressCard bodies are left to the rule above, whose -6px pull
+   * works through a pt-1.5 utility that `padding-top: 0` cannot beat (18px → 24px when both ran).
+   */
+  .card-body:not(.panel-x-children):has(> .table-block:first-child > .table-tools),
+  .card-body-flush:not(.panel-x-children):has(> .table-block:first-child > .table-tools) {
+    padding-top: 0;
+  }
+  .card-body:not(.panel-x-children) > .table-block:first-child > .table-tools,
+  .card-body-flush:not(.panel-x-children) > .table-block:first-child > .table-tools {
+    margin-top: 0;
+    margin-bottom: 0;
+    min-height: 18px;
+  }
+  .card-body > .table-block:first-child .table-tool,
+  .card-body-flush > .table-block:first-child .table-tool,
+  .panel-x-children > .table-block:first-child .table-tool,
+  .filter-bar + .table-block .table-tool,
+  .section-head + .table-block .table-tool {
+    padding-block: 0;
+    line-height: 16px;
+  }
+  .table-tool {
+    font-size: 12px;
+    color: var(--color-muted);
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 5px;
+    padding: 2px 7px;
+    cursor: pointer;
+  }
+  .table-tool:hover,
+  .table-tool[aria-expanded='true'],
+  .table-tool[aria-pressed='true'] {
+    color: var(--color-text);
+    border-color: var(--color-line);
+    background: var(--color-raised);
+  }
+
+  /*
+   * The other trigger `Popover` can wear: a filter control that lives in a `FilterBar`.
+   *
+   * `.table-tool` above is deliberately invisible until hovered, which is right for a table's column
+   * menu and wrong for a filter — a filter nobody can see is a filter that silently hides rows. So this
+   * one is always drawn, and every dimension is `FilterSelect`'s (32px tall, 6px radius, 13px type, the
+   * same `--color-line` on `--color-raised`) because the two sit side by side in the bar and a 2px
+   * height difference between neighbouring controls is the thing the eye catches first.
+   *
+   * `max-width` with an ellipsising value: a namespace name has no length limit, and without it one
+   * 60-character name pushes the result line and the reset button off the end of the bar.
+   */
+  /*
+   * A filter control, which has to look pressable before it is pressed.
+   *
+   * It used to sit on `--color-line` — the same hairline every static divider uses — so a control
+   * that changes what the table below it shows was quieter than the table's own borders, and read as
+   * a caption. `--color-line-strong` is the existing token for a border that means "this is an
+   * element", not "this is an edge", and the accent hover makes the affordance explicit before the
+   * click rather than only after it. Still no fill in the resting state: the toolbar holds several of
+   * these and filling them all would compete with the active state below.
+   */
+  .filter-tool {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 32px;
+    max-width: 280px;
+    font-size: 13px;
+    color: var(--color-text);
+    background: var(--color-raised);
+    border: 1px solid var(--color-line-strong);
+    border-radius: 6px;
+    padding: 0 8px;
+    cursor: pointer;
+    transition:
+      border-color 120ms ease,
+      background-color 120ms ease;
+  }
+  .filter-tool:hover:not(:disabled),
+  .filter-tool[aria-expanded='true'] {
+    border-color: var(--color-accent);
+    background: var(--color-accent-dim);
+  }
+  .filter-tool:hover:not(:disabled) .filter-tool-label,
+  .filter-tool[aria-expanded='true'] .filter-tool-label,
+  .filter-tool:hover:not(:disabled) .filter-tool-caret,
+  .filter-tool[aria-expanded='true'] .filter-tool-caret {
+    color: var(--color-accent-bright);
+  }
+  .filter-tool:disabled {
+    color: var(--color-muted);
+    border-color: var(--color-line);
+    background: var(--color-raised);
+    cursor: default;
+  }
+  .filter-tool-label {
+    color: var(--color-muted);
+    flex: none;
+  }
+  .filter-tool-value {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .filter-tool-caret {
+    flex: none;
+    font-size: 10px;
+    color: var(--color-muted);
+  }
+  /*
+   * An active filter, legible without hovering and without opening the menu.
+   *
+   * The accent fill and border are the existing `--color-accent-dim` / `--color-accent` pair, and the
+   * value switches to `--color-accent-bright` — the same hue lightened until small type passes AA,
+   * because `--color-accent` on `--color-raised` measures 2.94:1 and would make the one word that
+   * matters the hardest to read. No new colour enters the palette.
+   */
+  .filter-tool-on {
+    border-color: var(--color-accent);
+    background: var(--color-accent-dim);
+  }
+  .filter-tool-on .filter-tool-value {
+    color: var(--color-accent-bright);
+  }
+
+  /*
+   * A namespace, rendered as a tag rather than as a second name.
+   *
+   * The pod inventory lists every namespace at once, so the namespace is what an operator scans by —
+   * but beside a mono pod name in the same weight and colour it read as part of the same string. The
+   * tint separates the two without adding a colour: `--color-accent-bright` is the AA-legible sibling
+   * of the brand violet and is defined in both themes, and the fill is the same `--color-accent-dim`
+   * the active filter uses, so a tinted namespace and an active namespace filter visibly belong to
+   * one idea.
+   *
+   * 12px against the row's 13px is deliberate and is the only size drop here: a tag reads as
+   * secondary to the name it qualifies. It stays `tabular-nums`-free — these are words, not figures.
+   */
+  .ns-tag {
+    display: inline-block;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    vertical-align: bottom;
+    font-size: 12px;
+    line-height: 18px;
+    padding: 0 6px;
+    border: 1px solid var(--color-line);
+    border-radius: 4px;
+    background: var(--color-accent-dim);
+    color: var(--color-accent-bright);
+  }
+  .ns-tag:hover {
+    border-color: var(--color-accent);
+  }
+
+  /*
+   * A popover, rendered in a portal at the document root.
+   *
+   * `position: fixed` against a measured button rectangle, because the panel's own ancestor is
+   * `.table-wrap`, whose `overflow-x: auto` computes `overflow-y` to `auto` as well and clips anything
+   * taller than the rows below the button. That trap has cost this project time once already.
+   */
+  .popover {
+    position: fixed;
+    z-index: 60;
+    min-width: 212px;
+    max-height: min(60vh, 460px);
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    background: var(--color-surface);
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.28);
+  }
+  /*
+   * The InfoTip trigger and its panel.
+   *
+   * The trigger is `inline-flex` with `vertical-align: -2px` rather than a block or a float. That
+   * matters more than it looks: a `<th>` positions its contents with `text-align`, which only acts on
+   * *inline-level* boxes, so a floated or block trigger inside a right-aligned header would leave the
+   * label aligned and the icon somewhere else. `-2px` rather than `middle` because the glyph is a
+   * ring — `middle` centres the box and leaves the ring visibly high against an uppercase label.
+   *
+   * It is deliberately dim and brightens on hover and focus. A header row of eleven columns with
+   * eleven full-contrast `i` glyphs is a row of dots competing with the labels; at 55% they read as
+   * texture until wanted. Opacity, not a lighter colour, so it works on both themes with one rule.
+   *
+   * `cursor: help` and not `pointer`: pressing it does toggle the panel, but the affordance an
+   * operator should read is "this explains something", not "this navigates".
+   */
+  .infotip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    vertical-align: -2px;
+    margin-inline-start: 5px;
+    color: var(--color-muted);
+    cursor: help;
+    opacity: 0.55;
+    border-radius: 999px;
+    transition: opacity 120ms ease;
+  }
+  .infotip:hover,
+  .infotip:focus-visible {
+    opacity: 1;
+    color: var(--color-accent);
+  }
+  .infotip:focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+
+  /*
+   * Portalled to `document.body`, so `position: fixed` against the trigger's measured rectangle —
+   * the same reason as `.popover` above, and the same trap it exists to avoid.
+   *
+   * `width`, not `max-width`: the panel is positioned before it is measured (see `place()`), and a
+   * shrink-to-fit panel would be clamped against a width it does not yet have and then jump. 260px
+   * holds roughly two lines of the longest column explanation at this size.
+   *
+   * `normal` white-space, explicitly: these panels appear inside `.tbl thead th`, which sets
+   * `white-space: nowrap`, and inheritance would otherwise turn a two-sentence explanation into one
+   * 900px line running off the screen. The panel is outside that subtree in the DOM, but the class
+   * has to state it anyway — a future `body { white-space }` or a portal target change would
+   * reintroduce it silently.
+   *
+   * `pointer-events: none`: the panel is prose with nothing in it to click, and letting it take the
+   * pointer means moving toward it fires `mouseleave` on the trigger and `mouseenter` on the panel,
+   * which flickers. Nothing here needs selecting.
+   */
+  .infotip-panel {
+    position: fixed;
+    z-index: 70;
+    width: 260px;
+    padding: 8px 10px;
+    border: 1px solid var(--color-line);
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--color-raised) 95%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 10px 30px rgb(0 0 0 / 0.28);
+    color: var(--color-text);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.45;
+    letter-spacing: normal;
+    text-transform: none;
+    text-align: start;
+    white-space: normal;
+    pointer-events: none;
+    animation: infotip-enter 120ms ease-out;
+  }
+
+  .subtab-item:nth-last-child(-n + 2) .subtab-tip {
+    right: 0;
+    left: auto;
+  }
+  /* Opacity and 3px of travel. At motion intensity 3 this is the whole budget for a tooltip. */
+  @keyframes infotip-enter {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* --------------------------------------------------------------- info popover
+   *
+   * The four-part explanation panel (`components/InfoPopover.tsx`). Shares the `.infotip-panel`
+   * surface treatment deliberately — two different-looking explanation panels on one page would read
+   * as two different kinds of thing — but it is wider, scrollable, and `pointer-events: auto`,
+   * because unlike a tooltip this one contains links the reader is meant to click.
+   */
+  .info-popover {
+    position: fixed;
+    z-index: 70;
+    max-height: min(70vh, 520px);
+    overflow-y: auto;
+    padding: 12px 14px;
+    border: 1px solid var(--color-line);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--color-raised) 97%, transparent);
+    backdrop-filter: blur(10px);
+    box-shadow: 0 12px 34px rgb(0 0 0 / 0.3);
+    color: var(--color-text);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.5;
+    letter-spacing: normal;
+    text-transform: none;
+    text-align: start;
+    white-space: normal;
+    animation: infotip-enter 120ms ease-out;
+  }
+
+  .info-popover-title {
+    margin-bottom: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+  }
+
+  /* A rule between the parts rather than only spacing: the whole reason this control exists is that
+   * "what it means" and "what it cannot tell you" must not read as one continuous paragraph. */
+  .info-popover-part + .info-popover-part {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+  }
+
+  .info-popover-label {
+    margin-bottom: 3px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+  }
+
+  .info-popover-body {
+    color: var(--color-text);
+  }
+
+  .info-popover-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  /* A printable bullet, because `test/fleet/no-decorative-emoji.test.js` allows `−` and the
+   * `list-style` marker colour cannot be set independently of the text in every browser. */
+  .info-popover-list > li {
+    padding-inline-start: 12px;
+    text-indent: -12px;
+  }
+  .info-popover-list > li::before {
+    content: '− ';
+    color: var(--color-muted);
+  }
+  .info-popover-list > li:has(> .info-popover-link)::before {
+    content: '';
+  }
+
+  .info-popover-link {
+    color: var(--color-accent-bright);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .info-popover-link:hover {
+    color: var(--color-accent-hover);
+  }
+
+  /* --------------------------------------------------------------- skeletons
+   *
+   * A loading placeholder that keeps the page's structure on screen. Sized by the caller; this only
+   * supplies the surface and the pulse. The pulse is opacity only — at motion intensity 3 a shimmer
+   * sweep is over budget, and a moving highlight on eight cards reads as the page doing work it is
+   * not doing.
+   */
+  .skeleton {
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--color-line) 55%, transparent);
+    animation: skeleton-pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes skeleton-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.45;
+    }
+  }
+  /* Respect the OS setting. A pulsing page is exactly what this preference is asking us to stop. */
+  @media (prefers-reduced-motion: reduce) {
+    .skeleton {
+      animation: none;
+    }
+  }
+
+  /* --------------------------------------------------------------- distribution bars
+   *
+   * The error-breakdown visualisation. A plain div with a width percentage rather than a chart
+   * library: one dimension, no axes, and the number is printed beside it anyway, so a chart would add
+   * a dependency and a second way to be wrong about the same value.
+   *
+   * `min-width` is load-bearing. A row whose share rounds to 0% would otherwise render nothing, which
+   * reads as a missing bar rather than a small one — and the count beside it says 1.
+   */
+  .dist-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--color-line) 45%, transparent);
+  }
+  .dist-bar > span {
+    display: block;
+    height: 100%;
+    min-width: 2px;
+    border-radius: 999px;
+  }
+  .dist-bar-client > span {
+    background: color-mix(in srgb, var(--color-warn) 80%, transparent);
+  }
+  .dist-bar-server > span {
+    background: color-mix(in srgb, var(--color-bad) 80%, transparent);
+  }
+  .dist-bar-none > span {
+    background: color-mix(in srgb, var(--color-unknown) 65%, transparent);
+  }
+  .dist-bar-ok > span {
+    background: color-mix(in srgb, var(--color-ok) 70%, transparent);
+  }
+  /* A zero row stays visible but recedes, per the request: "Zero values remain visible but visually
+   * subtle." Hiding it would lose the information that the code was looked for and not found. */
+  .dist-bar-zero {
+    opacity: 0.55;
+  }
+
+  .popover-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .popover-list li {    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 4px;
+    border-radius: 5px;
+  }
+  .popover-list li:hover {
+    background: var(--color-raised);
+  }
+  .popover-list label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    cursor: pointer;
+    min-width: 0;
+  }
+  .popover-list label:has(input:disabled) {
+    cursor: default;
+  }
+  .popover-list label span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .popover-move {
+    display: flex;
+    gap: 2px;
+  }
+  .popover-move button {
+    font-size: 11px;
+    line-height: 1;
+    color: var(--color-muted);
+    background: none;
+    border: 1px solid var(--color-line);
+    border-radius: 4px;
+    padding: 2px 5px;
+    cursor: pointer;
+  }
+  .popover-move button:hover:not(:disabled) {
+    color: var(--color-text);
+    background: var(--color-raised);
+  }
+  .popover-move button:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  /*
+   * The search row above a long checkbox list, pinned to the top of the panel.
+   *
+   * `.popover` is itself the scroller (`overflow-y: auto`, capped at `min(60vh, 460px)`), so a second
+   * scroller around the list would nest two of them. Sticky instead: on a sixty-namespace cluster the
+   * box the operator is typing into has to stay reachable after the list has scrolled, and a search
+   * field that scrolls away is a search field that gets used once.
+   *
+   * `display: flex` so `SearchBox`'s own `flex-1` resolves and the field fills the row rather than
+   * sitting at its 220px minimum with a gap beside it.
+   *
+   * The negative inline margin plus matching padding makes the row reach the panel's edges, and the
+   * upward `box-shadow` — a solid 6px, no blur — paints the panel's own top padding, which a sticky box
+   * cannot reach by layout. Without it namespace names scroll visibly through the 6px gap above the
+   * field, which reads as a rendering fault rather than as a pinned header.
+   */
+  .popover-search {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    margin-inline: -6px;
+    margin-bottom: 6px;
+    padding: 0 6px 6px;
+    background: var(--color-surface);
+    border-bottom: 1px solid var(--color-line);
+    box-shadow: 0 -6px 0 var(--color-surface);
+  }
+
+  .popover-foot {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--color-line);
+  }
+  .popover-foot button {
+    width: 100%;
+    font-size: 12px;
+    color: var(--color-muted);
+    background: none;
+    border: 0;
+    padding: 4px;
+    border-radius: 5px;
+    cursor: pointer;
+    text-align: left;
+  }
+  .popover-foot button:hover:not(:disabled) {
+    color: var(--color-text);
+    background: var(--color-raised);
+  }
+  .popover-foot button:disabled {
+    opacity: 0.4;
+    cursor: default;
+  }
+
+  /*
+   * Column priority, driven by the table's own width rather than the viewport's.
+   *
+   * The detail panel takes 40-46% of the viewport out of the main region, which is what
+   * made wide tables clip on the right in the first review — the Overview lost its TOKEN column and
+   * Workloads lost RESTARTS and AGE, silently, off the edge. A container query measures
+   * the space the table actually has, so opening the panel drops the lowest-priority
+   * columns automatically and nothing is ever hidden without the layout knowing.
+   *
+   * This only works because the panel is a flex *sibling* of the content column rather
+   * than a `position: fixed` overlay: a fixed box is out of flow and never changes the
+   * inline size of anything, so for as long as the panel was fixed these two queries
+   * could not fire at all and the columns they protect went off the edge instead. See
+   * DetailPanel in components/layout.tsx — below 1200px it falls back to an overlay,
+   * and there the table has the full width again and these queries correctly stay quiet.
+   *
+   * Priority 1 columns have no class and never disappear.
+   */
+  /*
+   * The 8px start gutter is where the selected-row bar paints (see `tr[data-selected]` above). It is
+   * paid back by an equal negative margin, so the table stays on the heading line and the content box
+   * — the width every `@container` query below measures — does not change. A flush card has neither:
+   * its cells are inset by `--page-x` and the card border sits where the gutter would be.
+   */
+  .table-wrap {
+    container-type: inline-size;
+    overflow-x: auto;
+    padding-inline-start: 8px;
+    margin-inline-start: -8px;
+  }
+  .card-body-flush .table-wrap {
+    padding-inline-start: 0;
+    margin-inline-start: 0;
+  }
+  /*
+   * A table wider than its card says so: the right edge fades while there are columns past it, and
+   * the fade leaves once the last column is scrolled in. Measured 2026-09-27 at 1100px, twelve
+   * tables (PVCs, Certificates, Helm, Modules, Integrity, Admission, Cost, Namespaces, Pods …) cut
+   * a column mid-word at the card edge with nothing to tell a reader the rest was a scroll away.
+   *
+   * Scroll-driven, so there is no JS and no resize observer: a wrap that does not overflow has an
+   * inactive scroll timeline, the animation has no effect, and `--table-fade` stays at its 0px
+   * initial value — tables that fit are untouched. Browsers without `animation-timeline` get no fade.
+   */
+  @supports (animation-timeline: scroll()) {
+    .table-wrap {
+      mask-image: linear-gradient(to left, transparent 0, #000 var(--table-fade));
+      animation: table-fade linear both;
+      animation-timeline: scroll(self inline);
+    }
+  }
+  /*
+   * Five shed tiers, because column count differs by a factor of two across the console and a
+   * single pair of thresholds cannot serve six columns and twelve. Measured in Chrome against
+   * the real components; every number below is a container width, not a viewport width.
+   *
+   *   .tbl        900 / 660   — the six-to-eight column tables (Overview, Tokens, Helm)
+   *   .tbl-mid   1000 / 700   — nine columns (Workloads, pod inventory)
+   *   .tbl-wide  1300 / 1000  — ten-plus columns (Helm releases, OPA webhooks, Traffic)
+   *   .tbl-xwide 1440 / 1120  — ten-to-twelve numeric columns, wrapped headers (Top Utilization,
+   *                             Nodes)
+   *   .tbl-lean  1440 / 1040  — eleven columns whose pinned set is narrow (OPA policies)
+   *
+   * The base pair is 900/660 and must stay there. Raising it to 1000/700 for everyone — which
+   * is what shipped in the first pass — hid columns that measurably fit: at a 1280px viewport
+   * the Overview table gets a 940px container with 0px of overflow, and 1000 threw away CPU,
+   * Memory and Kubernetes version anyway; Tokens lost Due and Last error the same way. A
+   * threshold that fires where nothing overflows is not a priority system, it is data loss.
+   *
+   * The tiers only ever hide, never restore, so on `.tbl.tbl-mid` the union applies and the
+   * higher threshold is the one that bites first. That is why each tier repeats only the two
+   * rules it needs rather than trying to undo the tier below it.
+   */
+  @container (max-width: 900px) {
+    .tbl .prio-3 {
+      display: none;
+    }
+  }
+  @container (max-width: 660px) {
+    .tbl .prio-2 {
+      display: none;
+    }
+  }
+
+  /*
+   * Nine columns. Measured on Workloads: it needs ~1145px and gets 1174px at a 1512px viewport
+   * with the rail expanded and no panel, so the full set fits exactly where it should. The band
+   * this tier exists for is the one an operator reaches by collapsing the rail *and* opening a
+   * detail panel (container 954px): at 900 all nine columns stayed and overflowed by 204px, so
+   * the reward for making room was a sideways scrollbar. Shedding prio-3 there brings it to 0.
+   * The pod inventory (also nine) goes from 389px of overflow to 112px at container 940px.
+   */
+  @container (max-width: 1000px) {
+    .tbl-mid .prio-3 {
+      display: none;
+    }
+  }
+  @container (max-width: 700px) {
+    .tbl-mid .prio-2 {
+      display: none;
+    }
+  }
+
+  /*
+   * Twelve columns, shedding soonest. Measured on the Nodes table: it needs 1589px, and at
+   * container 1162px — a 1512px viewport, rail expanded, no panel — it overflowed by 427px
+   * while nine-column Workloads fit that same width with room to spare. Hiding prio-3 there
+   * brings it to ~1160px, which is why the first threshold sits above 1162.
+   */
+  @container (max-width: 1300px) {
+    .tbl-wide .prio-3 {
+      display: none;
+    }
+  }
+  @container (max-width: 1000px) {
+    .tbl-wide .prio-2 {
+      display: none;
+    }
+  }
+
+  /*
+   * Numeric columns are wider than their count suggests: every ratio column on Top Utilization
+   * carries a header naming its denominator ("Usage / request"), and on a `table-layout: auto`
+   * table the header is what sets a numeric column's width. Wrapping those headers (above) was the
+   * first half of the fix; these two thresholds are the second.
+   *
+   * Measured at a 1440px viewport, rail expanded, no panel — container 1167px. Full set, then
+   * prio-3 hidden: Pods 1431 / fits, Namespaces fits / fits, Requests & Limits 1222 / fits, Errors
+   * & Pressure 1295 / fits. So prio-3 has to go below 1440 — above the widest full set.
+   *
+   * The second threshold was then measured the same way at a 1280px viewport (container 1007px),
+   * which is the band an operator reaches by narrowing the window: there the prio-2 set needs
+   * 1105px on Requests & Limits and 1056px on Errors & Pressure, so prio-2 goes below 1120 — above
+   * both, and below the 1167px container where those columns demonstrably fit.
+   *
+   * The rule these numbers come from, learned twice in this file: a threshold that fires where the
+   * columns still fit is not a priority system, it is data loss. Measure, then set it above what
+   * the set it keeps actually needs.
+   */
+  /*
+   * On this tier the header, not the data, sets a numeric column's width: "Current request
+   * headroom" in uppercase at 0.06em tracking measured 197px while every cell under it is eight
+   * characters of monospace. Letting those headers wrap to a second line is what makes ten to
+   * twelve numeric columns fit a laptop, and it costs one taller header row rather than a column.
+   *
+   * `nowrap` stays on the body cells — a wrapped *value* is genuinely harder to scan, and the
+   * `max` caps on text columns already truncate with an ellipsis and a title.
+   */
+  .tbl-xwide thead th {
+    white-space: normal;
+    vertical-align: bottom;
+    line-height: 1.25;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  @container (max-width: 1440px) {
+    .tbl-xwide .prio-3 {
+      display: none;
+    }
+  }
+  @container (max-width: 1120px) {
+    .tbl-xwide .prio-2 {
+      display: none;
+    }
+  }
+
+  /*
+   * The lean tier: xwide's first threshold, a far lower second one.
+   *
+   * OPA Policy Governance is eleven columns that need 1628px, so like Top Utilization it has to
+   * start shedding above 1440 — at a 1728px viewport its container is 1405px and `tbl-wide`'s
+   * 1300px threshold never fired, which clipped 223px. But its priority-1 set is only 563px wide
+   * (Policy, Enforcement, Status, Violations), so xwide's 1120px prio-2 threshold threw away
+   * ConstraintTemplate, Target kinds and Last audit at a 1440px viewport (container 1105px) while
+   * leaving 542px of empty table — the same "sheds where nothing overflows is data loss" mistake
+   * the base tier's comment above records, one width up.
+   *
+   * 1040 is measured, not chosen: the surviving set is 1014px, so the threshold sits just above
+   * what it needs and below the 1105px container where it demonstrably fits. Under 1040 — a
+   * narrowed window or a collapsed rail — prio-2 goes and the 563px pinned set stays legible.
+   */
+  .tbl-lean thead th {
+    white-space: normal;
+    vertical-align: bottom;
+    line-height: 1.25;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  @container (max-width: 1440px) {
+    .tbl-lean .prio-3 {
+      display: none;
+    }
+  }
+  @container (max-width: 1040px) {
+    .tbl-lean .prio-2 {
+      display: none;
+    }
+  }
+
+  /*
+   * The nested micro-table: a few rows of detail inside a drawer, a card or an expanded row.
+   *
+   * Three of these existed as hand-rolled markup (the container breakdown in the pod drawer, a
+   * LimitRange's defaults, the OPA per-policy bars) and each had invented its own type size and row
+   * height. They are genuinely not `.tbl` tables — a 44px row and a 36px uppercase header inside a
+   * 380px drawer is most of the drawer — so they get a variant rather than a conversion: same 12px
+   * inter-column padding, same flush outer edge, same right-aligned numerics, at two thirds the
+   * height. Everything an operator has learned about reading a table on this console still holds.
+   */
+  .tbl-inline {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .tbl-inline thead th {
+    height: 24px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--color-line);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-muted);
+    text-align: left;
+    white-space: nowrap;
+  }
+  /* The same cascade-layer trap as `.tbl thead th` above, on the compact nested variant. */
+  .tbl-inline thead th.num {
+    text-align: right;
+  }
+  .tbl-inline thead th.ctr {
+    text-align: center;
+  }
+  .tbl-inline tbody td {
+    height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+  .tbl-inline tbody tr + tr td {
+    border-top: 1px solid color-mix(in srgb, var(--color-line) 60%, transparent);
+  }
+  .tbl-inline thead th:first-child,
+  .tbl-inline tbody td:first-child {
+    padding-inline-start: 0;
+  }
+  .tbl-inline thead th:last-child,
+  .tbl-inline tbody td:last-child {
+    padding-inline-end: 0;
+  }
+
+  /*
+   * The panel's entry. Opacity and transform only — the panel's *width* is a real layout
+   * change now, so animating it would reflow the table sixty times a second and thrash
+   * the container queries above between column counts. The width lands at once; the
+   * contents slide the last few pixels into it, clipped by the panel's own overflow.
+   */
+  @keyframes detail-panel-enter {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .detail-panel-enter {
+    animation: detail-panel-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .detail-panel-enter {
+      animation: none;
+    }
+  }
+}
+
+
+/* The table scroll cue (see `.table-wrap` above). Registered so the length interpolates, and left at
+   0px — no fade — whenever the wrap has no scroll timeline because nothing overflows. */
+@property --table-fade {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@keyframes table-fade {
+  0%,
+  96% {
+    --table-fade: 40px;
+  }
+  100% {
+    --table-fade: 0px;
+  }
+}

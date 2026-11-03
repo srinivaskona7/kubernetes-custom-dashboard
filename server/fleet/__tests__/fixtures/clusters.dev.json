@@ -1,0 +1,42 @@
+{
+  "_comment": [
+    "Development fixtures only. Deliberately contains NO real cluster except platformsbx,",
+    "and no real API URL at all: the demo entries use the reserved .invalid TLD, which by",
+    "RFC 2606 can never resolve. Even if this file were mounted by mistake in place of the",
+    "real registry, it could not reach another team's cluster.",
+    "The production registry (chart ConfigMap) lists platformsbx and nothing else."
+  ],
+  "clusters": [
+    {
+      "id": "platformsbx",
+      "displayName": "Platform Sandbox",
+      "env": "sbx",
+      "apiUrl": "https://kubernetes.default.svc"
+    },
+    {
+      "id": "demo-dev",
+      "displayName": "Demo DEV (fixture)",
+      "env": "dev",
+      "apiUrl": "https://api.demo-dev.invalid"
+    },
+    {
+      "id": "demo-uat",
+      "displayName": "Demo UAT (fixture)",
+      "env": "uat",
+      "apiUrl": "https://api.demo-uat.invalid"
+    },
+    {
+      "id": "demo-unreachable",
+      "displayName": "Demo Unreachable (fixture)",
+      "env": "uat",
+      "apiUrl": "https://api.demo-unreachable.invalid"
+    },
+    {
+      "id": "demo-offboarded",
+      "displayName": "Demo Offboarded (fixture)",
+      "env": "prod",
+      "apiUrl": "https://api.demo-offboarded.invalid",
+      "enabled": false
+    }
+  ]
+}

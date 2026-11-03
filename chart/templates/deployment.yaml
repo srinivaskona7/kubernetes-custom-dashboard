@@ -1,0 +1,194 @@
+{{- if and .Values.persistence.enabled (ne .Values.strategy.type "Recreate") }}
+{{- fail (printf "strategy.type is %q but persistence.enabled is true. The data PVC is ReadWriteOnce, so an EBS volume attaches to ONE node at a time. Under RollingUpdate the new pod is created before the old one is terminated; if it lands on a different node it hangs forever in ContainerCreating with 'Multi-Attach error for volume'. Recreate also keeps two processes from ever writing the same single-writer SQLite file. Use strategy.type=Recreate, or set persistence.enabled=false (accepting data loss)." .Values.strategy.type) }}
+{{- end }}
+{{- if and (not .Values.persistence.enabled) (not .Values.persistence.allowEphemeral) }}
+{{- fail "persistence.enabled is false: the SQLite database would be written to ephemeral container storage and LOST on every pod restart. Set persistence.enabled=true, or persistence.allowEphemeral=true to accept data loss." }}
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "btp-kyma-fleet-dashboard.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "btp-kyma-fleet-dashboard.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  # Recreate, not RollingUpdate — terminating the old pod first is what detaches
+  # the ReadWriteOnce data volume so the new pod can attach it.
+  strategy:
+    type: {{ .Values.strategy.type }}
+    {{- if eq .Values.strategy.type "Recreate" }}
+    # Explicit null: valid on a fresh install (unmarshals to nil). It does NOT fix
+    # upgrades of a Deployment first created as RollingUpdate — Kubernetes
+    # server-defaults rollingUpdate onto it (Forbidden under Recreate) and Helm
+    # strips this null from its patch. scripts/helm-deploy.sh removes the live
+    # field with kubectl before helm upgrade runs.
+    rollingUpdate: null
+    {{- end }}
+  revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      {{- include "btp-kyma-fleet-dashboard.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- if or .Values.splunk.enabled .Values.podAnnotations }}
+      annotations:
+        {{- if .Values.splunk.enabled }}
+        checksum/splunk-inputs: {{ include (print $.Template.BasePath "/splunk-configmap.yaml") . | sha256sum | quote }}
+        {{- end }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      labels:
+        {{- include "btp-kyma-fleet-dashboard.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "btp-kyma-fleet-dashboard.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3001
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3001"
+            - name: LOG_LEVEL
+              value: "{{ .Values.logging.level }}"
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: WHISPER_SECRET_NAME
+              value: "{{ .Values.whisper.secretName }}"
+            - name: WHISPER_NAMESPACE
+              value: "{{ .Values.whisper.namespace }}"
+            - name: WHISPER_CLIENT_CERT_PATH
+              value: "/tls/tls.crt"
+            - name: WHISPER_CLIENT_KEY_PATH
+              value: "/tls/tls.key"
+            - name: WHISPER_CLIENT_CA_PATH
+              value: "/tls/ca.crt"
+            - name: DOTENV_CONFIG_QUIET
+              value: "true"
+            - name: BASE_PATH
+              value: "/btp-kyma-fleet-dashboard/"
+            - name: ALLOWED_GROUPS
+              value: {{ .Values.auth.allowedGroups | quote }}
+            {{- if .Values.persistence.enabled }}
+            - name: DB_PATH
+              value: "/app/data/app.db"
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          {{- with .Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - name: app-logs
+              mountPath: /logs
+            - name: tls
+              mountPath: /tls
+            {{- if .Values.persistence.enabled }}
+            - name: data
+              mountPath: /app/data
+            {{- end }}
+        {{- if .Values.splunk.enabled }}
+        - name: splunkforwarder
+          image: {{ .Values.splunk.image }}
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SPLUNK_CLUSTER
+              value: "{{ .Values.splunk.cluster }}"
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1Gi
+            limits:
+              cpu: 1
+              memory: 1Gi
+          volumeMounts:
+            - name: app-logs
+              mountPath: /logs
+            - name: splunkforwarder-temp
+              mountPath: /opt/splunkforwarder/var
+            - name: splunkforwarder-config
+              mountPath: /etc/splunk/custom_inputs/app1
+              readOnly: true
+            - name: podinfo
+              mountPath: /etc/splunk/podinfo
+              readOnly: true
+        {{- end }}
+      volumes:
+        - name: app-logs
+          emptyDir: {}
+        - name: splunkforwarder-temp
+          emptyDir: {}
+        {{- if .Values.persistence.enabled }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ include "btp-kyma-fleet-dashboard.fullname" . }}-data
+        {{- end }}
+        {{- if .Values.splunk.enabled }}
+        - name: splunkforwarder-config
+          configMap:
+            name: {{ include "btp-kyma-fleet-dashboard.fullname" . }}-splunk-inputs
+        {{- end }}
+        - name: podinfo
+          downwardAPI:
+            items:
+              - path: "labels"
+                fieldRef:
+                  fieldPath: metadata.labels
+              - path: "uid"
+                fieldRef:
+                  fieldPath: metadata.uid
+        - name: tls
+          csi:
+            readOnly: true
+            driver: narrative.apple.com
+            volumeAttributes:
+              narrative.apple.com/type: "{{ .Values.narrative.type }}"
+              narrative.apple.com/domain: "{{ .Values.narrative.domain }}"
+              narrative.apple.com/name: "{{ .Values.narrative.name }}"
+              narrative.apple.com/pod-identity: "{{ .Values.narrative.podIdentity }}"
+              narrative.apple.com/fs-group: "{{ .Values.narrative.fsGroup }}"
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

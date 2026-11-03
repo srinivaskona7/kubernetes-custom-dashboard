@@ -1,0 +1,38 @@
+{{- if and .Values.splunk.enabled .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: splunkforwarder-egress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "btp-kyma-fleet-dashboard.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # Splunk cluster management port
+    {{- range .Values.networkPolicy.splunkManagementCIDRs }}
+    - to:
+        - ipBlock: { cidr: "{{ . }}" }
+      ports:
+        - { protocol: TCP, port: 8089 }
+    {{- end }}
+    # Splunk indexer receiving port
+    {{- range .Values.networkPolicy.splunkIndexerCIDRs }}
+    - to:
+        - ipBlock: { cidr: "{{ . }}" }
+      ports:
+        - { protocol: TCP, port: 9998 }
+    {{- end }}
+{{- end }}

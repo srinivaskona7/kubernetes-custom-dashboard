@@ -1,0 +1,24 @@
+Btp Kyma Fleet Dashboard deployed successfully.
+
+Namespace: {{ .Release.Namespace }}
+Release:   {{ .Release.Name }}
+
+Get the application service:
+  kubectl get svc -n {{ .Release.Namespace }} {{ include "btp-kyma-fleet-dashboard.fullname" . }}
+
+Health check (from inside the cluster):
+  curl http://{{ include "btp-kyma-fleet-dashboard.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:3001/api/health
+
+=== Narrative TLS ===
+
+Certificates are auto-provisioned by the Narrative CSI driver. The pod mounts
+them at /tls. No NarrativeIssuer CRD is shipped in this chart — apply
+scripts/narrative-issuer.yaml manually with admin kubectl context once per
+namespace before the first deploy. The cert is the service-account pod
+identity: aprn:apple:aws:us-west-2:<account>:eks-service-account:<cluster>/{{ .Release.Namespace }}/{{ include "btp-kyma-fleet-dashboard.serviceAccountName" . }}
+Grant that APRN read access on the Whisper secret.
+
+=== NLB Sharing Setup ===
+
+This app uses ClusterIP (no new NLB). To route traffic through the existing
+task manager NLB at sura.btp.apple.com, see shield-config/README.md.
