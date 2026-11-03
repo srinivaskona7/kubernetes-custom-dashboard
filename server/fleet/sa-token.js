@@ -4,7 +4,7 @@
  * The operator has already run, against the target cluster:
  *
  *   kubectl apply -f fleet-dashboard-rbac.yaml
- *   kubectl create token fleet-reader -n kyma-fleet --duration=24h
+ *   kubectl create token fleet-reader -n fleet-dashboard --duration=24h
  *
  * ...and pastes what the second command printed. No admin credential ever reaches this
  * application, which is the whole reason this path exists alongside the kubeconfig upload.

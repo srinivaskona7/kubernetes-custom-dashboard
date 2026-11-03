@@ -242,7 +242,7 @@ test('grouping is cluster-agnostic: no rule keys off an object name', () => {
   const src = readFileSync(
     join(import.meta.dirname, '..', 'tools', 'api-inventory-model.js'), 'utf8'
   );
-  for (const banned of ['platform-sbx', 'platformsbx', 'kyma-fleet', 'c-9d0a141', 'ondemand.com']) {
+  for (const banned of ['platform-sbx', 'platformsbx', 'fleet-dashboard', 'c-9d0a141', 'ondemand.com']) {
     assert.equal(src.includes(banned), false, `the model hardcodes ${banned}`);
   }
 });

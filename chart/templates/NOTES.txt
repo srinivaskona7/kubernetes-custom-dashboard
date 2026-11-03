@@ -1,24 +1,30 @@
-Btp Kyma Fleet Dashboard deployed successfully.
+Kubernetes Fleet Dashboard deployed.
 
-Namespace: {{ .Release.Namespace }}
-Release:   {{ .Release.Name }}
+  Namespace: {{ .Release.Namespace }}
+  Release:   {{ .Release.Name }}
 
-Get the application service:
-  kubectl get svc -n {{ .Release.Namespace }} {{ include "btp-kyma-fleet-dashboard.fullname" . }}
+Service:
+  kubectl -n {{ .Release.Namespace }} get svc {{ include "k8s-fleet-dashboard.fullname" . }}
 
-Health check (from inside the cluster):
-  curl http://{{ include "btp-kyma-fleet-dashboard.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:3001/api/health
+Health check from inside the cluster:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "k8s-fleet-dashboard.fullname" . }} 3001:{{ .Values.service.port }}
+  curl http://127.0.0.1:3001/api/health
 
-=== Narrative TLS ===
+Authentication: {{ .Values.auth.mode }}
+{{- if eq .Values.auth.mode "none" }}
+  WARNING: no authentication. The server refuses AUTH_MODE=none when
+  NODE_ENV=production, so this release will fail its readiness probe unless
+  an authenticating proxy sits in front of it. Set auth.mode=oidc and
+  auth.jwksUrl to a real issuer.
+{{- else if not .Values.auth.jwksUrl }}
+  WARNING: auth.mode=oidc but auth.jwksUrl is empty. The pod will not start.
+{{- end }}
 
-Certificates are auto-provisioned by the Narrative CSI driver. The pod mounts
-them at /tls. No NarrativeIssuer CRD is shipped in this chart — apply
-scripts/narrative-issuer.yaml manually with admin kubectl context once per
-namespace before the first deploy. The cert is the service-account pod
-identity: aprn:apple:aws:us-west-2:<account>:eks-service-account:<cluster>/{{ .Release.Namespace }}/{{ include "btp-kyma-fleet-dashboard.serviceAccountName" . }}
-Grant that APRN read access on the Whisper secret.
+RBAC: {{ if .Values.rbac.create }}cluster-wide read-only ClusterRole {{ include "k8s-fleet-dashboard.clusterRoleName" . }}{{ else }}disabled (provide your own bindings){{ end }}
+{{- if .Values.rbac.readSecrets }}
+  This role can read Secrets cluster-wide (needed for Helm release metadata).
+  Values are redacted in the UI, but the grant is real — narrow it if your
+  policy requires it.
+{{- end }}
 
-=== NLB Sharing Setup ===
-
-This app uses ClusterIP (no new NLB). To route traffic through the existing
-task manager NLB at sura.btp.apple.com, see shield-config/README.md.
+Persistence: {{ if .Values.persistence.enabled }}PVC {{ include "k8s-fleet-dashboard.fullname" . }}-data ({{ .Values.persistence.size }}, storageClass {{ default "<cluster default>" .Values.persistence.storageClass }}){{ else }}ephemeral{{ end }}

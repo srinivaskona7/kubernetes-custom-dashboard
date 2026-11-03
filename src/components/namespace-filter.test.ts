@@ -11,15 +11,15 @@ import {
 } from './namespace-filter';
 
 const rows = [
-  { name: 'a', namespace: 'applecare' },
+  { name: 'a', namespace: 'acme-shop' },
   { name: 'b', namespace: 'istio-system' },
-  { name: 'c', namespace: 'applecare' },
-  { name: 'd', namespace: 'kyma-system' }
+  { name: 'c', namespace: 'acme-shop' },
+  { name: 'd', namespace: 'platform-system' }
 ];
 
 describe('namespacesOf', () => {
   it('returns each namespace once, sorted', () => {
-    expect(namespacesOf(rows, r => r.namespace)).toEqual(['applecare', 'istio-system', 'kyma-system']);
+    expect(namespacesOf(rows, r => r.namespace)).toEqual(['acme-shop', 'istio-system', 'platform-system']);
   });
 
   it('drops null, undefined and empty — a cluster-scoped row is not a namespace option', () => {
@@ -34,25 +34,25 @@ describe('namespacesOf', () => {
 
 describe('matchesNamespace', () => {
   it('an empty selection admits everything — the default state is not a filter', () => {
-    expect(matchesNamespace('applecare', new Set())).toBe(true);
+    expect(matchesNamespace('acme-shop', new Set())).toBe(true);
     expect(matchesNamespace(null, new Set())).toBe(true);
   });
 
   it('a single selection admits only that namespace', () => {
-    const sel = new Set(['applecare']);
-    expect(matchesNamespace('applecare', sel)).toBe(true);
+    const sel = new Set(['acme-shop']);
+    expect(matchesNamespace('acme-shop', sel)).toBe(true);
     expect(matchesNamespace('istio-system', sel)).toBe(false);
   });
 
   it('several selections are OR, not AND', () => {
-    const sel = new Set(['applecare', 'istio-system']);
-    expect(matchesNamespace('applecare', sel)).toBe(true);
+    const sel = new Set(['acme-shop', 'istio-system']);
+    expect(matchesNamespace('acme-shop', sel)).toBe(true);
     expect(matchesNamespace('istio-system', sel)).toBe(true);
-    expect(matchesNamespace('kyma-system', sel)).toBe(false);
+    expect(matchesNamespace('platform-system', sel)).toBe(false);
   });
 
   it('a cluster-scoped row survives any selection — no namespace can exclude it', () => {
-    const sel = new Set(['applecare']);
+    const sel = new Set(['acme-shop']);
     expect(matchesNamespace(null, sel)).toBe(true);
     expect(matchesNamespace(undefined, sel)).toBe(true);
     expect(matchesNamespace('', sel)).toBe(true);
@@ -60,20 +60,20 @@ describe('matchesNamespace', () => {
 
   it('composes with a type filter without either losing rows the other kept', () => {
     const all = [
-      { kind: 'Deployment', ns: 'applecare' },
+      { kind: 'Deployment', ns: 'acme-shop' },
       { kind: 'Deployment', ns: 'istio-system' },
-      { kind: 'Pod', ns: 'applecare' },
+      { kind: 'Pod', ns: 'acme-shop' },
       { kind: 'ClusterRole', ns: null }
     ];
-    const sel = new Set(['applecare']);
+    const sel = new Set(['acme-shop']);
     const out = all.filter(r => r.kind === 'Deployment').filter(r => matchesNamespace(r.ns, sel));
-    // The spec's own example: Deployments + Namespace=applecare is exactly one row.
-    expect(out).toEqual([{ kind: 'Deployment', ns: 'applecare' }]);
+    // The spec's own example: Deployments + Namespace=acme-shop is exactly one row.
+    expect(out).toEqual([{ kind: 'Deployment', ns: 'acme-shop' }]);
   });
 });
 
 describe('searchNamespaces', () => {
-  const all = ['applecare', 'istio-system', 'kyma-system'];
+  const all = ['acme-shop', 'istio-system', 'platform-system'];
 
   it('returns everything for an empty or whitespace search', () => {
     expect(searchNamespaces(all, '')).toEqual(all);
@@ -81,8 +81,8 @@ describe('searchNamespaces', () => {
   });
 
   it('matches a substring anywhere, case-insensitively', () => {
-    expect(searchNamespaces(all, 'SYSTEM')).toEqual(['istio-system', 'kyma-system']);
-    expect(searchNamespaces(all, 'care')).toEqual(['applecare']);
+    expect(searchNamespaces(all, 'SYSTEM')).toEqual(['istio-system', 'platform-system']);
+    expect(searchNamespaces(all, 'shop')).toEqual(['acme-shop']);
   });
 
   it('returns an empty list rather than everything when nothing matches', () => {
@@ -112,13 +112,13 @@ describe('toggleNamespace', () => {
 
 describe('pruneNamespaces', () => {
   it('drops a selection that is no longer an option', () => {
-    const out = pruneNamespaces(new Set(['applecare', 'gone']), ['applecare', 'istio-system']);
-    expect([...out]).toEqual(['applecare']);
+    const out = pruneNamespaces(new Set(['acme-shop', 'gone']), ['acme-shop', 'istio-system']);
+    expect([...out]).toEqual(['acme-shop']);
   });
 
   it('returns the SAME instance when nothing changed, so a useMemo does not loop', () => {
-    const sel = new Set(['applecare']);
-    expect(pruneNamespaces(sel, ['applecare', 'istio-system'])).toBe(sel);
+    const sel = new Set(['acme-shop']);
+    expect(pruneNamespaces(sel, ['acme-shop', 'istio-system'])).toBe(sel);
   });
 
   it('returns the same empty instance untouched', () => {
@@ -127,9 +127,9 @@ describe('pruneNamespaces', () => {
   });
 
   it('can prune to empty, which is "all" again rather than "nothing"', () => {
-    const out = pruneNamespaces(new Set(['gone']), ['applecare']);
+    const out = pruneNamespaces(new Set(['gone']), ['acme-shop']);
     expect(out.size).toBe(0);
-    expect(matchesNamespace('applecare', out)).toBe(true);
+    expect(matchesNamespace('acme-shop', out)).toBe(true);
   });
 });
 
@@ -139,11 +139,11 @@ describe('namespaceLabel', () => {
   });
 
   it('names a single selection in full — the name is the answer', () => {
-    expect(namespaceLabel(new Set(['applecare']))).toBe('applecare');
+    expect(namespaceLabel(new Set(['acme-shop']))).toBe('acme-shop');
   });
 
   it('counts two or more, because three long names do not fit a toolbar button', () => {
-    expect(namespaceLabel(new Set(['applecare', 'istio-system']))).toBe('2 namespaces');
+    expect(namespaceLabel(new Set(['acme-shop', 'istio-system']))).toBe('2 namespaces');
     expect(namespaceLabel(new Set(['a', 'b', 'c']))).toBe('3 namespaces');
   });
 });
@@ -158,13 +158,13 @@ describe('namespaceTitle', () => {
   });
 
   it('resolves the count in namespaceLabel by listing every selected name', () => {
-    const t = namespaceTitle(new Set(['istio-system', 'applecare']), 3);
-    expect(t).toContain('applecare, istio-system');
+    const t = namespaceTitle(new Set(['istio-system', 'acme-shop']), 3);
+    expect(t).toContain('acme-shop, istio-system');
     expect(t).toContain('2 of 3');
   });
 
   it('always says cluster-scoped rows stay visible, so their presence is never a surprise', () => {
-    expect(namespaceTitle(new Set(['applecare']), 3)).toContain('Cluster-scoped rows');
+    expect(namespaceTitle(new Set(['acme-shop']), 3)).toContain('Cluster-scoped rows');
   });
 });
 

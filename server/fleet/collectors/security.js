@@ -11,11 +11,10 @@ import k8sModule from '../k8s.js';
 const { list, METADATA_ONLY } = k8sModule;
 import safeListModule from './safe-list.js';
 const { safeList, unavailableLabels, truncatedLabels, isTruncated } = safeListModule;
-// Generic label-map-vs-LabelSelector evaluation. Shared rather than re-implemented so the
-// NetworkPolicy coverage below cannot disagree with the admission page about which pods a
-// selector actually picks up.
-import policyModule from './policy.js';
-const { selectorMatches } = policyModule;
+// Generic label-map-vs-LabelSelector evaluation, shared with helm-related.js so the two cannot
+// disagree about which pods a selector actually picks up.
+import labelSelectorModule from './label-selector.js';
+const { selectorMatches } = labelSelectorModule;
 // The one rule for "is this a system/app namespace", shared with compliance.js so the two
 // pages cannot contradict each other about the same cluster — they used to each hardcode
 // their own list (24 vs 18 namespaces) and disagree.

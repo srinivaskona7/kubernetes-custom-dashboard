@@ -267,7 +267,7 @@ export function visibilityNotice(w: TrafficWindow | undefined): VisibilityNotice
     `readsSkipped` is not a partial read, it is no read — every count on the page then describes
     nothing that was looked at. Calling that "partial" would understate it by the whole window, so it
     gets its own title and its own sentence. The wording follows the Window sub-tab's, which was
-    written against a mesh pointed at `kyma-logs`.
+    written against a mesh pointed at `otel-logs`.
   */
   if (c.skippedReads) {
     return {

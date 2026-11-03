@@ -19,8 +19,8 @@ const svc = over => ({
 });
 
 const gw = over => ({
-  metadata: { namespace: NS, name: 'kyma-gateway' },
-  spec: { selector: LABELS, servers: [{ hosts: ['*.c.example.com'], tls: { mode: 'SIMPLE', credentialName: 'kyma-tls' } }] },
+  metadata: { namespace: NS, name: 'public-gateway' },
+  spec: { selector: LABELS, servers: [{ hosts: ['*.c.example.com'], tls: { mode: 'SIMPLE', credentialName: 'public-tls' } }] },
   ...over
 });
 
@@ -53,7 +53,7 @@ test('loadBalancerSourceRanges really read as empty is 0, not absent', () => {
   assert.equal(out.lb.sourceRangesCount, 0);
 });
 
-test('a Service read successfully with no loadBalancerSourceRanges key at all is also 0, never "not read" (live platformsbx shape)', () => {
+test('a Service read successfully with no loadBalancerSourceRanges key at all is also 0, never "not read" (live cluster shape)', () => {
   const noKey = svc({ spec: { type: 'LoadBalancer', selector: LABELS } });
   assert.equal('loadBalancerSourceRanges' in noKey.spec, false);
   const out = edgeMetaOf({
@@ -70,11 +70,11 @@ test('the Gateway hosts, TLS mode and credentialName (name only) are listed for 
     gateways: { items: [gw()], unavailable: false },
     gatewayLabels: LABELS,
   });
-  assert.deepEqual(out.gateways, [{ namespace: NS, name: 'kyma-gateway', servers: [{ hosts: ['*.c.example.com'], tlsMode: 'SIMPLE', credentialName: 'kyma-tls' }] }]);
+  assert.deepEqual(out.gateways, [{ namespace: NS, name: 'public-gateway', servers: [{ hosts: ['*.c.example.com'], tlsMode: 'SIMPLE', credentialName: 'public-tls' }] }]);
 });
 
 test('a Gateway that does not select the ingress workload is left out', () => {
-  const other = gw({ metadata: { namespace: 'applecare', name: 'other-gw' }, spec: { selector: { app: 'other' }, servers: [] } });
+  const other = gw({ metadata: { namespace: 'shop', name: 'other-gw' }, spec: { selector: { app: 'other' }, servers: [] } });
   const out = edgeMetaOf({
     services: { items: [], unavailable: false },
     gateways: { items: [other], unavailable: false },
@@ -84,8 +84,8 @@ test('a Gateway that does not select the ingress workload is left out', () => {
 });
 
 test('a Gateway with no selector, or an empty one, does not vacuously match every workload', () => {
-  const noSelector = gw({ metadata: { namespace: 'applecare', name: 'no-selector-gw' }, spec: { servers: [] } });
-  const emptySelector = gw({ metadata: { namespace: 'applecare', name: 'empty-selector-gw' }, spec: { selector: {}, servers: [] } });
+  const noSelector = gw({ metadata: { namespace: 'shop', name: 'no-selector-gw' }, spec: { servers: [] } });
+  const emptySelector = gw({ metadata: { namespace: 'shop', name: 'empty-selector-gw' }, spec: { selector: {}, servers: [] } });
   const out = edgeMetaOf({
     services: { items: [], unavailable: false },
     gateways: { items: [noSelector, emptySelector], unavailable: false },
@@ -104,21 +104,21 @@ test('a failed Service or Gateway read is null, never an empty result mistaken f
   assert.equal(out.gateways, null);
 });
 
-// Live platformsbx shape (2026-09-28): the LB Service and kyma-gateway select on BOTH `app` and
-// `istio`, so matching them against `{istio}` alone found no LB and dropped kyma-gateway. The
+// Live cluster shape: the LB Service and public-gateway select on BOTH `app` and
+// `istio`, so matching them against `{istio}` alone found no LB and dropped public-gateway. The
 // labels to match against are the ingress pod's own, read from the pods list already in hand.
 test('the ingress labels come from the gateway pod, so a two-key Service and Gateway selector still match', () => {
   const { ingressLabelsOf } = _edgeModule;
   const podLabels = { app: 'istio-ingressgateway', istio: 'ingressgateway', 'pod-template-hash': 'x' };
-  const pods = { items: [{ metadata: { namespace: NS, name: 'istio-ingressgateway-1', labels: podLabels } }, { metadata: { namespace: 'applecare', name: 'srv-1', labels: { app: 'srv' } } }] };
+  const pods = { items: [{ metadata: { namespace: NS, name: 'istio-ingressgateway-1', labels: podLabels } }, { metadata: { namespace: 'shop', name: 'srv-1', labels: { app: 'srv' } } }] };
   const both = { app: 'istio-ingressgateway', istio: 'ingressgateway' };
   const out = edgeMetaOf({
     services: { items: [svc({ spec: { type: 'LoadBalancer', selector: both } })], unavailable: false },
-    gateways: { items: [gw({ metadata: { namespace: 'kyma-system', name: 'kyma-gateway' }, spec: { selector: both, servers: [] } }), gw({ metadata: { namespace: 'kyma-system', name: 'connectivity-proxy-tunnel' }, spec: { selector: LABELS, servers: [] } })], unavailable: false },
+    gateways: { items: [gw({ metadata: { namespace: 'istio-system', name: 'public-gateway' }, spec: { selector: both, servers: [] } }), gw({ metadata: { namespace: 'istio-system', name: 'partner-gateway' }, spec: { selector: LABELS, servers: [] } })], unavailable: false },
     gatewayLabels: ingressLabelsOf(pods)
   });
   assert.equal(out.lb.hostname, 'my-lb-123.elb.amazonaws.com');
-  assert.deepEqual(out.gateways.map(g => g.name).sort(), ['connectivity-proxy-tunnel', 'kyma-gateway']);
+  assert.deepEqual(out.gateways.map(g => g.name).sort(), ['partner-gateway', 'public-gateway']);
 });
 
 test('with no gateway pod in the read, the ingress labels fall back to both chart labels', () => {

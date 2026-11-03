@@ -197,12 +197,12 @@ function useSelectedResource(): [string | null, (id: string | null) => void] {
  * ## Why it is worth a pill
  *
  * "What is the URL" is the first question anyone asks about a deployed release and the last thing
- * the console could answer: the host sits in one field of one APIRule, four clicks down the
+ * the console could answer: the host sits in one field of one Ingress or HTTPRoute, four clicks down the
  * Resources tab, inside a fact list. It is an identity fact, so it belongs beside the chart version.
  *
  * ## The host is read; the scheme is not
  *
- * `resolveAccessEndpoint` reads `x-forwarded-host` — or `spec.hosts[0]` — off an APIRule in the
+ * `resolveAccessEndpoint` reads the first host off an Ingress or HTTPRoute in the
  * release's live set. Nothing in a manifest states `http` or `https`, so the `https://` in the href
  * is this console's assumption and the label says `assumed` in as many words rather than letting a
  * rendered scheme imply a field. A host that is a wildcard pattern gets no link at all: it is not
@@ -272,12 +272,12 @@ export default function HelmReleasePage({ onRefreshed }: PageProps) {
   /**
    * The access endpoint, reported up from the live read rather than fetched again here.
    *
-   * It is a fact about the release's APIRule, and the only payload carrying that is `/related` —
+   * It is a fact about the release's routes, and the only payload carrying that is `/related` —
    * which `LiveTabs` fetches for the four live tabs and nothing else. Hoisting that fetch to the
    * shell to fill a header pill would make every Values or Manifest visit pay for a forty-resource
    * live read, which is the one structural property this page is built around.
    *
-   * So: no pill until a live tab has answered, and none at all on a release with no APIRule host.
+   * So: no pill until a live tab has answered, and none at all on a release with no route host.
    * The key pins the answer to the release it came from, so navigating between two releases cannot
    * leave the first one's hostname over the second one's name.
    */
@@ -571,7 +571,7 @@ function LiveTabs({
   /**
    * Hand the header its endpoint, before any of the early returns below.
    *
-   * `null` is reported as deliberately as a host is: a release whose APIRule lost its host, or whose
+   * `null` is reported as deliberately as a host is: a release whose route lost its host, or whose
    * live read failed, must clear the pill rather than leave the previous reading in the header —
    * a stale hostname beside a live status is the page contradicting itself.
    */

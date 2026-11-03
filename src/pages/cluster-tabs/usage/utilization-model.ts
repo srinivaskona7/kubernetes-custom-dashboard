@@ -499,7 +499,7 @@ export interface UtilizationPod {
  * The pod rows this tab works from, derived once per payload.
  *
  * Takes the already-deduplicated inventory (`pod-inventory.ts`) rather than re-flattening
- * `workloads.items`: label selectors overlap, three Deployments in `kyma-system` legitimately claim
+ * `workloads.items`: label selectors overlap, three Deployments in `platform-system` legitimately claim
  * the same pod, and counting that pod's memory three times would inflate every namespace and
  * cluster total on this tab. `owners` carries the ambiguity forward instead of resolving it.
  */

@@ -153,7 +153,7 @@ test('a log format carrying no traceparent is a CONFIGURATION finding, not an em
   assert.equal(c.source, 'request-id');
   assert.equal(c.traceparentLines, 0);
   assert.equal(c.requestIdLines, 2);
-  assert.equal(c.traceparentAbsent, true, 'Kyma stock stdout-json does not log traceparent — the tab must say so');
+  assert.equal(c.traceparentAbsent, true, 'a stock JSON access-log format does not log traceparent — the tab must say so');
   assert.equal(c.nestingInferred, true, 'without a span id, hop nesting is inferred from duration');
 
   // And the opposite: a mesh that does log it must not be told it does not.
@@ -538,7 +538,7 @@ test('collect(): a mesh whose access logs go elsewhere reads nothing and says so
   const telemetry = [
     {
       metadata: { name: 'mesh-default', namespace: 'istio-system' },
-      spec: { accessLogging: [{ providers: [{ name: 'kyma-logs' }] }] }
+      spec: { accessLogging: [{ providers: [{ name: 'otel-logs' }] }] }
     }
   ];
   const listFn = fakeListFn([
@@ -554,7 +554,7 @@ test('collect(): a mesh whose access logs go elsewhere reads nothing and says so
         {
           metadata: { name: 'istio', namespace: 'istio-system' },
           data: {
-            mesh: 'extensionProviders:\n  - name: kyma-logs\n    envoyOtelAls:\n      service: telemetry-otlp-logs.kyma-system.svc.cluster.local\n      port: 4317\n'
+            mesh: 'extensionProviders:\n  - name: otel-logs\n    envoyOtelAls:\n      service: otel-collector.observability.svc.cluster.local\n      port: 4317\n'
           }
         }
       ]
@@ -625,7 +625,7 @@ test('pollOf names liveness paths and leaves the Streamlit session socket and re
 });
 
 test('namespacesOf keeps only valid DNS labels, de-duplicated and sorted', () => {
-  assert.deepEqual(namespacesOf('shop, bad_ns,,kyma-system,shop'), ['kyma-system', 'shop']);
+  assert.deepEqual(namespacesOf('shop, bad_ns,,istio-system,shop'), ['istio-system', 'shop']);
   assert.equal(namespacesOf(''), null);
   assert.equal(namespacesOf('Not/A/Label'), null);
 });
@@ -694,7 +694,7 @@ test('collect(): a namespace scope reads that namespace plus the ingress gateway
 
 // --- destination names (srv/fleet/destination-names.js), through collect() ------------------
 
-/** srv opening a TLS passthrough to an XSUAA address, as Envoy logged it on platformsbx. */
+/** srv opening a TLS passthrough to an identity-provider address, as Envoy logs it. */
 const EGRESS = JSON.stringify({
   response_code: 0,
   method: null,
@@ -713,9 +713,9 @@ const EGRESS = JSON.stringify({
 
 const EGRESS_POLICY = {
   metadata: {
-    name: 'egress-allow-btp-traffic',
-    namespace: 'applecare',
-    annotations: { 'xsuaa-service-instances-us10': '3.214.110.153, 18.213.242.208' }
+    name: 'egress-allow-saas',
+    namespace: 'shop',
+    annotations: { 'idp-us10': '3.214.110.153, 18.213.242.208' }
   }
 };
 
@@ -749,14 +749,14 @@ test('collect(): an external node is named from an annotated NetworkPolicy, on t
 
   const node = externalNode(out);
   assert.ok(node, 'the egress line drew an external node');
-  assert.equal(node.destination.display, 'SAP Authorization and Trust (XSUAA) · us10');
+  assert.equal(node.destination.display, 'idp-us10');
   assert.equal(node.destination.source, 'networkpolicy');
-  assert.equal(node.destination.key, 'xsuaa-service-instances-us10');
-  assert.deepEqual(node.destination.objects, ['NetworkPolicy applecare/egress-allow-btp-traffic']);
+  assert.equal(node.destination.key, 'idp-us10');
+  assert.deepEqual(node.destination.objects, ['NetworkPolicy shop/egress-allow-saas']);
 
   const row = out.outbound.rows.find(r => r.to.name === '3.214.110.153:443');
   assert.ok(row, 'the egress line is an Outbound row');
-  assert.equal(row.to.destination.display, 'SAP Authorization and Trust (XSUAA) · us10');
+  assert.equal(row.to.destination.display, 'idp-us10');
 
   const np = seen.find(c => c.path.startsWith('/apis/networking.k8s.io/v1/networkpolicies'));
   assert.ok(np && !np.accept, 'the NetworkPolicy list is a full read: ipBlocks live in spec.egress');
@@ -788,7 +788,7 @@ test('collect(): journeys carry a class; endpoints leave refusals and direct-IP 
     withDetails(line({ requestId: 'r3', path: '/admin', code: 403 }), 'rbac_access_denied_matched_policy[none]')
   ];
   const { listFn: base, textFn } = collectStubs({ pods: THREE_PODS, podLogs: { 'istio-ingressgateway-1': lines.join('\n') } });
-  const gateway = { metadata: { namespace: 'kyma-system', name: 'kyma-gateway' }, spec: { servers: [{ hosts: ['*.example.com'] }] } };
+  const gateway = { metadata: { namespace: 'istio-system', name: 'public-gateway' }, spec: { servers: [{ hosts: ['*.example.com'] }] } };
   const listFn = async ctx => (ctx.path.startsWith('/apis/networking.istio.io/v1/gateways') ? [gateway] : base(ctx));
 
   const out = await collect({ cluster: { id: 'c1' }, token: 't', listFn, textFn });
@@ -811,10 +811,10 @@ test('collect(): journeys carry a class; endpoints leave refusals and direct-IP 
   });
 });
 
-test('collect(): with Gateways, VirtualServices and APIRules all refused, a named host stays an app journey', async () => {
+test('collect(): with Gateways and every route source refused, a named host stays an app journey', async () => {
   const { listFn: base, textFn } = collectStubs({ pods: THREE_PODS, podLogs: { 'istio-ingressgateway-1': line({ requestId: 'r1', path: '/api', code: 503 }) } });
   const forbidden = () => Promise.reject(Object.assign(new Error('forbidden'), { status: 403 }));
-  const refusedPath = p => /\/(gateways|virtualservices|apirules)(\?|$)/.test(p);
+  const refusedPath = p => /\/(gateways|virtualservices|ingresses|httproutes)(\?|$)/.test(p);
   const listFn = async ctx => (refusedPath(ctx.path) ? forbidden() : base(ctx));
 
   const out = await collect({ cluster: { id: 'c1' }, token: 't', listFn, textFn });
@@ -823,7 +823,7 @@ test('collect(): with Gateways, VirtualServices and APIRules all refused, a name
   assert.deepEqual(out.endpoints.endpoints.map(e => e.path), ['/api']);
 });
 
-test('collect(): Gateways and VirtualServices refused with APIRules read is still an unread route table, as Traffic rules it', async () => {
+test('collect(): Gateways and VirtualServices refused with Ingresses read is still an unread route table, as Traffic rules it', async () => {
   const { listFn: base, textFn } = collectStubs({ pods: THREE_PODS, podLogs: { 'istio-ingressgateway-1': line({ requestId: 'r1', path: '/api', code: 503 }) } });
   const forbidden = () => Promise.reject(Object.assign(new Error('forbidden'), { status: 403 }));
   const listFn = async ctx => (/\/(gateways|virtualservices)(\?|$)/.test(ctx.path) ? forbidden() : base(ctx));

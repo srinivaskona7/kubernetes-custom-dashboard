@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseNamespaceParam, serializeNamespaceParam } from './use-namespace-selection';
 
-const options = ['applecare', 'istio-system', 'kyma-system'];
+const options = ['acme-shop', 'istio-system', 'platform-system'];
 
 describe('parseNamespaceParam', () => {
   it('a missing parameter is the empty selection, which means all namespaces', () => {
@@ -14,25 +14,25 @@ describe('parseNamespaceParam', () => {
   });
 
   it('reads one namespace', () => {
-    expect([...parseNamespaceParam('applecare', options)]).toEqual(['applecare']);
+    expect([...parseNamespaceParam('acme-shop', options)]).toEqual(['acme-shop']);
   });
 
   it('reads several, which is the OR selection', () => {
-    const out = parseNamespaceParam('applecare,istio-system', options);
-    expect(out.has('applecare')).toBe(true);
+    const out = parseNamespaceParam('acme-shop,istio-system', options);
+    expect(out.has('acme-shop')).toBe(true);
     expect(out.has('istio-system')).toBe(true);
-    expect(out.has('kyma-system')).toBe(false);
+    expect(out.has('platform-system')).toBe(false);
   });
 
   it('tolerates whitespace a human added by hand', () => {
-    expect([...parseNamespaceParam(' applecare , istio-system ', options)].sort()).toEqual([
-      'applecare',
+    expect([...parseNamespaceParam(' acme-shop , istio-system ', options)].sort()).toEqual([
+      'acme-shop',
       'istio-system'
     ]);
   });
 
   it('drops a namespace that no longer exists, so a stale link does not empty the table', () => {
-    expect([...parseNamespaceParam('applecare,deleted-ns', options)]).toEqual(['applecare']);
+    expect([...parseNamespaceParam('acme-shop,deleted-ns', options)]).toEqual(['acme-shop']);
   });
 
   it('drops every value when none exists, which reads as all namespaces rather than none', () => {
@@ -43,14 +43,14 @@ describe('parseNamespaceParam', () => {
     // The first render happens before the cluster payload arrives, so there are no options yet.
     // Narrowing against an empty list here would discard a selection from a shared link, and the
     // next write would persist that loss to the URL. "No options" means "not known yet".
-    expect([...parseNamespaceParam('applecare,istio-system', [])].sort()).toEqual([
-      'applecare',
+    expect([...parseNamespaceParam('acme-shop,istio-system', [])].sort()).toEqual([
+      'acme-shop',
       'istio-system'
     ]);
   });
 
   it('deduplicates a repeated value', () => {
-    expect([...parseNamespaceParam('applecare,applecare', options)]).toEqual(['applecare']);
+    expect([...parseNamespaceParam('acme-shop,acme-shop', options)]).toEqual(['acme-shop']);
   });
 });
 
@@ -60,18 +60,18 @@ describe('serializeNamespaceParam', () => {
   });
 
   it('writes one name plainly', () => {
-    expect(serializeNamespaceParam(new Set(['applecare']))).toBe('applecare');
+    expect(serializeNamespaceParam(new Set(['acme-shop']))).toBe('acme-shop');
   });
 
   it('sorts, so two operators ticking the same pair in opposite orders share one URL', () => {
-    expect(serializeNamespaceParam(new Set(['istio-system', 'applecare']))).toBe('applecare,istio-system');
-    expect(serializeNamespaceParam(new Set(['applecare', 'istio-system']))).toBe('applecare,istio-system');
+    expect(serializeNamespaceParam(new Set(['istio-system', 'acme-shop']))).toBe('acme-shop,istio-system');
+    expect(serializeNamespaceParam(new Set(['acme-shop', 'istio-system']))).toBe('acme-shop,istio-system');
   });
 });
 
 describe('the two halves round-trip', () => {
   it('survives serialize then parse for every selection size', () => {
-    for (const sel of [new Set<string>(), new Set(['applecare']), new Set(options)]) {
+    for (const sel of [new Set<string>(), new Set(['acme-shop']), new Set(options)]) {
       const raw = serializeNamespaceParam(sel);
       const back = parseNamespaceParam(raw, options);
       expect([...back].sort()).toEqual([...sel].sort());

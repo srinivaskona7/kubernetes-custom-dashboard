@@ -198,7 +198,7 @@ test('the report names the resource a collector was refused, instead of implying
     if (args.path === DENIED) {
       throw new ClusterError(
         FORBIDDEN,
-        'serviceaccounts is forbidden: User "system:serviceaccount:kyma-fleet:fleet-reader" ' +
+        'serviceaccounts is forbidden: User "system:serviceaccount:fleet-dashboard:fleet-reader" ' +
           'cannot list resource "serviceaccounts" in API group "" at the cluster scope',
         { cluster: args.cluster.id, status: 403 }
       );
@@ -1259,7 +1259,7 @@ test('bootstrap-oidc callback: a browser is redirected back to the console, a fe
     // `/onboard/advanced`, not `/onboard`: the sign-in is its own page, and that page holds the
     // explanation for the failure being asserted here. A redirect to the token page would drop
     // the operator somewhere that cannot say why the provider refused.
-    assert.ok(location.startsWith('/kyma-fleet-dashboard/#/onboard/advanced?'), `unexpected redirect target: ${location}`);
+    assert.ok(location.startsWith('/k8s-fleet-dashboard/#/onboard/advanced?'), `unexpected redirect target: ${location}`);
 
     // The params live in the hash's own query string — that is where a HashRouter's
     // useSearchParams reads them from. Parsed the same way the page will parse them.

@@ -2,7 +2,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import _request_class from '../collectors/request-class.js';
-const { classify, classifyJourney, NOISE_CLASSES } = _request_class;
+const { classify, classifyJourney, NOISE_CLASSES, SYSTEM_NAMESPACES, PLATFORM_HOST_PREFIXES, routeAdmits } = _request_class;
 import _destination_names2 from '../destination-names.js';
 const { buildNameIndex } = _destination_names2;
 
@@ -14,7 +14,7 @@ const CTX = {
   gatewayHosts: [{ host: '*.c.example.com' }],
   routes: [
     { host: 'shop.c.example.com', namespace: 'shop' },
-    { host: 'grafana.c.example.com', namespace: 'kyma-system' }
+    { host: 'grafana.c.example.com', namespace: 'kube-system' }
   ]
 };
 const rec = over => ({ method: 'GET', authority: 'shop.c.example.com', path: '/', code: 200, responseCodeDetails: 'via_upstream', responseFlags: null, ...over });
@@ -29,8 +29,7 @@ test('the spec table, row by row', () => {
   assert.equal(edge({ code: 403, responseCodeDetails: 'rbac_access_denied_matched_policy[none]' }), 'security-refused');
   assert.equal(edge({ authority: 'healthz.c.example.com' }), 'probe');
   assert.equal(classify(rec({ path: '/healthz' }), { ...CTX, direction: 'inbound' }), 'probe');
-  assert.equal(edge({ authority: 'cp.c.example.com' }), 'platform');
-  assert.equal(edge({ authority: 'grafana.c.example.com' }), 'platform');
+  assert.equal(edge({ authority: 'grafana.c.example.com' }), 'platform', 'routed to a system namespace');
   assert.equal(out('52.1.2.3'), 'egress-declared');
   assert.equal(out('8.8.8.8'), 'egress-undeclared');
   assert.equal(edge({}), 'app');
@@ -87,4 +86,16 @@ test('with the Gateways and every route unread, a named host is not called direc
   const j = classifyJourney({ hops: [{ role: 'ingress', authority: 'shop.c.example.com', path: '/api/orders', code: 503, responseCodeDetails: 'via_upstream' }] }, blind);
   assert.deepEqual(j, { class: 'app', appError: true });
   assert.equal(edge({}, { ...blind, hostsUnknown: false }), 'direct-or-tls', 'read and empty still means admitted by nothing');
+});
+
+test('platform is decided by the route\'s namespace only: no vendor namespace or host prefix is built in', () => {
+  assert.deepEqual([...SYSTEM_NAMESPACES].sort(), ['cert-manager', 'istio-system', 'kube-system']);
+  assert.deepEqual(PLATFORM_HOST_PREFIXES, []);
+  assert.equal(edge({ authority: 'cp.c.example.com' }), 'app', 'a host prefix alone makes nothing platform');
+});
+
+test('a route host admits by exact name or wildcard only; a short name is not prefixed to a domain', () => {
+  assert.equal(routeAdmits('shop.c.example.com', 'shop.c.example.com'), true);
+  assert.equal(routeAdmits('*.c.example.com', 'shop.c.example.com'), true);
+  assert.equal(routeAdmits('shop', 'shop.c.example.com'), false);
 });

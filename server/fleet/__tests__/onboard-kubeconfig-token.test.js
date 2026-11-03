@@ -37,7 +37,7 @@ const CA_B64 = Buffer.from(CA_PEM, 'utf8').toString('base64');
 const SERVER = 'https://api.onboard-combined-test.invalid';
 
 /** A service-account JWT with real-looking claims. Unsigned — nothing here verifies one. */
-function saJwt({ namespace = 'kyma-fleet', serviceAccount = 'fleet-reader', expSeconds = 24 * 3600 } = {}) {
+function saJwt({ namespace = 'fleet-dashboard', serviceAccount = 'fleet-reader', expSeconds = 24 * 3600 } = {}) {
   const b64 = obj => Buffer.from(JSON.stringify(obj), 'utf8').toString('base64url');
   return [
     b64({ alg: 'RS256', typ: 'JWT' }),
@@ -256,7 +256,7 @@ test('an SSO kubeconfig and a pasted token onboard together: the file supplies t
       name: 'Combined SSO',
       env: 'sbx',
       kubeconfig: kubeconfig(),
-      token: saJwt({ namespace: 'kyma-fleet', serviceAccount: 'fleet-reader' })
+      token: saJwt({ namespace: 'fleet-dashboard', serviceAccount: 'fleet-reader' })
     });
     assert.equal(res.status, 201, JSON.stringify(res.body));
 
@@ -268,7 +268,7 @@ test('an SSO kubeconfig and a pasted token onboard together: the file supplies t
 
     // Credential from the pasted token: the record's identity is its claims, and the file's
     // exec block contributed nothing.
-    assert.equal(stored.namespace, 'kyma-fleet');
+    assert.equal(stored.namespace, 'fleet-dashboard');
     assert.equal(stored.serviceAccount, 'fleet-reader');
     assert.equal(stored.authMode, 'token');
     assert.ok(!JSON.stringify(stored).includes('kubectl-oidc_login'), 'the exec credential leaked into the record');

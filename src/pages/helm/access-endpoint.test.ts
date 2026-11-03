@@ -25,90 +25,93 @@ function resource(kind: string, name: string, facts: Record<string, unknown> = {
 }
 
 describe('resolveAccessEndpoint', () => {
-  it('prefers the forwarded host, which is the name an operator types', () => {
-    const e = resolveAccessEndpoint([
-      resource('APIRule', 'app-api', { forwardedHost: 'app.example.com', hosts: ['app-approuter.app.svc.cluster.local'] })
-    ]);
-    expect(e).toMatchObject({ host: 'app.example.com', source: 'x-forwarded-host', url: 'https://app.example.com' });
+  it('reads the first host an Ingress rule declares', () => {
+    const e = resolveAccessEndpoint([resource('Ingress', 'app-web', { hosts: ['app.example.com'], backends: ['app-web'] })]);
+    expect(e).toMatchObject({ host: 'app.example.com', source: 'spec.rules[].host', route: 'Ingress/app-web', url: 'https://app.example.com' });
   });
 
-  it('falls back to the first declared host', () => {
-    const e = resolveAccessEndpoint([resource('APIRule', 'app-api', { hosts: ['declared.example.com'] })]);
-    expect(e).toMatchObject({ host: 'declared.example.com', source: 'spec.hosts' });
+  it('reads an HTTPRoute hostname', () => {
+    const e = resolveAccessEndpoint([resource('HTTPRoute', 'app-route', { hosts: ['route.example.com'] })]);
+    expect(e).toMatchObject({ host: 'route.example.com', source: 'spec.hostnames', route: 'HTTPRoute/app-route' });
   });
 
-  it('returns null when no APIRule names a host', () => {
-    expect(resolveAccessEndpoint([resource('APIRule', 'app-api', { hosts: [] })])).toBeNull();
-    expect(resolveAccessEndpoint([resource('APIRule', 'app-api', {})])).toBeNull();
-    expect(resolveAccessEndpoint([resource('Service', 'app-approuter')])).toBeNull();
+  it('returns null when no route names a host', () => {
+    expect(resolveAccessEndpoint([resource('Ingress', 'app-web', { hosts: [] })])).toBeNull();
+    expect(resolveAccessEndpoint([resource('HTTPRoute', 'app-route', {})])).toBeNull();
+    expect(resolveAccessEndpoint([resource('Service', 'app-web')])).toBeNull();
     expect(resolveAccessEndpoint([])).toBeNull();
   });
 
-  it('codes defensively for a backend that sends neither field', () => {
-    // The wire gained forwardedHost/hosts after this UI shipped; an older server must not crash it.
+  it('ignores kinds that are not routes, even when they carry hosts', () => {
+    // A VirtualService's `hosts` is often the in-mesh Service name, not an address anyone types.
+    expect(resolveAccessEndpoint([resource('VirtualService', 'vs', { hosts: ['app.example.com'] })])).toBeNull();
+  });
+
+  it('codes defensively for a backend that sends no facts', () => {
     expect(resolveAccessEndpoint(undefined)).toBeNull();
-    expect(resolveAccessEndpoint([{ ...resource('APIRule', 'r'), facts: undefined as never }])).toBeNull();
+    expect(resolveAccessEndpoint([{ ...resource('Ingress', 'r'), facts: undefined as never }])).toBeNull();
   });
 
   it('ignores a blank or whitespace-only host', () => {
-    expect(resolveAccessEndpoint([resource('APIRule', 'r', { forwardedHost: '   ' })])).toBeNull();
-    expect(resolveAccessEndpoint([resource('APIRule', 'r', { forwardedHost: '', hosts: ['  ', 'real.example.com'] })]))
-      .toMatchObject({ host: 'real.example.com', source: 'spec.hosts' });
+    expect(resolveAccessEndpoint([resource('Ingress', 'r', { hosts: ['   '] })])).toBeNull();
+    expect(resolveAccessEndpoint([resource('Ingress', 'r', { hosts: ['  ', 'real.example.com'] })])).toMatchObject({
+      host: 'real.example.com'
+    });
   });
 
   it('shows a wildcard host but does not link it', () => {
-    const e = resolveAccessEndpoint([resource('APIRule', 'r', { hosts: ['*.example.com'] })]);
+    const e = resolveAccessEndpoint([resource('Ingress', 'r', { hosts: ['*.example.com'] })]);
     expect(e).toMatchObject({ host: '*.example.com', url: null });
   });
 
   it('does not link a value that already carries a scheme or a path', () => {
-    expect(resolveAccessEndpoint([resource('APIRule', 'r', { hosts: ['https://a.example.com'] })])?.url).toBeNull();
-    expect(resolveAccessEndpoint([resource('APIRule', 'r', { hosts: ['a.example.com/api'] })])?.url).toBeNull();
+    expect(resolveAccessEndpoint([resource('Ingress', 'r', { hosts: ['https://a.example.com'] })])?.url).toBeNull();
+    expect(resolveAccessEndpoint([resource('Ingress', 'r', { hosts: ['a.example.com/api'] })])?.url).toBeNull();
   });
 
   it('links a host that carries an explicit port', () => {
-    expect(resolveAccessEndpoint([resource('APIRule', 'r', { hosts: ['a.example.com:8443'] })])?.url).toBe(
+    expect(resolveAccessEndpoint([resource('Ingress', 'r', { hosts: ['a.example.com:8443'] })])?.url).toBe(
       'https://a.example.com:8443'
     );
   });
 
-  it('is deterministic across several APIRules, forwarded host first then by name', () => {
-    const rules = [
-      resource('APIRule', 'z-rule', { hosts: ['z.example.com'] }),
-      resource('APIRule', 'a-rule', { hosts: ['a.example.com'] }),
-      resource('APIRule', 'm-rule', { forwardedHost: 'm.example.com' })
+  it('is deterministic across several routes, Ingress first then by name', () => {
+    const routes = [
+      resource('HTTPRoute', 'a-route', { hosts: ['h.example.com'] }),
+      resource('Ingress', 'z-ing', { hosts: ['z.example.com'] }),
+      resource('Ingress', 'm-ing', { hosts: ['m.example.com'] })
     ];
-    expect(resolveAccessEndpoint(rules)?.host).toBe('m.example.com');
-    expect(resolveAccessEndpoint([...rules].reverse())?.host).toBe('m.example.com');
-    expect(resolveAccessEndpoint(rules)?.candidates).toBe(3);
-    const declaredOnly = rules.filter(r => r.name !== 'm-rule');
-    expect(resolveAccessEndpoint(declaredOnly)?.host).toBe('a.example.com');
+    expect(resolveAccessEndpoint(routes)?.host).toBe('m.example.com');
+    expect(resolveAccessEndpoint([...routes].reverse())?.host).toBe('m.example.com');
+    expect(resolveAccessEndpoint(routes)?.candidates).toBe(3);
+    const routesOnly = routes.filter(r => r.kind === 'HTTPRoute');
+    expect(resolveAccessEndpoint(routesOnly)?.host).toBe('h.example.com');
   });
 
   it('always marks the scheme as assumed', () => {
-    expect(resolveAccessEndpoint([resource('APIRule', 'r', { hosts: ['a.example.com'] })])?.schemeAssumed).toBe(true);
+    expect(resolveAccessEndpoint([resource('Ingress', 'r', { hosts: ['a.example.com'] })])?.schemeAssumed).toBe(true);
   });
 });
 
 describe('endpointTitle', () => {
-  it('names the field and the APIRule, and says the scheme is a guess', () => {
-    const e = resolveAccessEndpoint([resource('APIRule', 'app-api', { forwardedHost: 'app.example.com' })])!;
+  it('names the field and the route, and says the scheme is a guess', () => {
+    const e = resolveAccessEndpoint([resource('Ingress', 'app-web', { hosts: ['app.example.com'] })])!;
     const title = endpointTitle(e);
-    expect(title).toContain('x-forwarded-host');
-    expect(title).toContain('APIRule/app-api');
+    expect(title).toContain('spec.rules[].host');
+    expect(title).toContain('Ingress/app-web');
     expect(title).toContain('assumption');
   });
 
   it('explains a missing link instead of leaving it unexplained', () => {
-    const e = resolveAccessEndpoint([resource('APIRule', 'r', { hosts: ['*.example.com'] })])!;
+    const e = resolveAccessEndpoint([resource('Ingress', 'r', { hosts: ['*.example.com'] })])!;
     expect(endpointTitle(e)).toContain('Not linked');
   });
 
-  it('says how many APIRules declared a host when there is more than one', () => {
+  it('says how many routes declared a host when there is more than one', () => {
     const e = resolveAccessEndpoint([
-      resource('APIRule', 'a', { hosts: ['a.example.com'] }),
-      resource('APIRule', 'b', { hosts: ['b.example.com'] })
+      resource('Ingress', 'a', { hosts: ['a.example.com'] }),
+      resource('HTTPRoute', 'b', { hosts: ['b.example.com'] })
     ])!;
-    expect(endpointTitle(e)).toContain('2 APIRules');
+    expect(endpointTitle(e)).toContain('2 routes');
   });
 });

@@ -120,8 +120,8 @@ describe('edge and number words', () => {
   });
 
   it('cuts a long name in the middle', () => {
-    expect(fitName('applecare-responder-approuter', 20)).toMatch(/^applecare-r.*ter$/);
-    expect(fitName('applecare-responder-approuter', 20)).toHaveLength(20);
+    expect(fitName('acme-shop-responder-approuter', 20)).toMatch(/^acme-shop-r.*ter$/);
+    expect(fitName('acme-shop-responder-approuter', 20)).toHaveLength(20);
     expect(fitName('srv')).toBe('srv');
   });
 

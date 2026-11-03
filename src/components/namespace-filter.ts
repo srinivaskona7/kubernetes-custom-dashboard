@@ -37,7 +37,7 @@ export function namespacesOf<T>(rows: readonly T[], of: (row: T) => string | nul
   }
   // Plain locale sort. Grouping system namespaces last was considered and rejected: "system" is not a
   // property Kubernetes records, so any such grouping is this console guessing from name prefixes —
-  // and `kyma-system` vs `applecare` is exactly the guess an operator would have to un-learn.
+  // and `platform-system` vs `acme-shop` is exactly the guess an operator would have to un-learn.
   return [...seen].sort((a, b) => a.localeCompare(b));
 }
 

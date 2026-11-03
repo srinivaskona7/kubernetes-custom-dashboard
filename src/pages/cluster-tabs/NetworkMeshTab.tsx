@@ -7,10 +7,8 @@
  *
  * All three sections use their per-cluster endpoint — `api.clusterNetworking`,
  * `api.clusterMesh`, `api.clusterCertificates`. Networking used to call the fleet-wide
- * `api.networking()` and filter every row list in the browser, which was wrong twice over:
- * `GET /networking` re-derives its own summary and **drops all three APIRule-migration facts**,
- * so `apirulesByVersion`, `apirulesNeedingMigration` and `apirulesUnavailable` were read on
- * every poll and never reachable; and it paid for the whole fleet's read to draw one cluster.
+ * `api.networking()` and filter every row list in the browser, which paid for the whole fleet's
+ * read to draw one cluster.
  *
  * Three independent `useAsync` calls, three independent scopes — one section's failure never
  * blanks the other two, the same defensive posture the standalone pages already use.
@@ -24,9 +22,7 @@ import {
   Count,
   StatTile,
   UnavailableEmptyBody,
-  unavailableEntries,
   unavailableScope,
-  truncatedEntries,
   envelopeScope,
   NotInstalled
 } from '../../components/unavailable';
@@ -111,28 +107,9 @@ function classificationTone(c: string): 'ok' | 'warn' | 'bad' | 'unknown' {
 
 // ------------------------------------------------------------------------- Networking
 
-/**
- * The APIRule version an object was *created* as, and whether that is still reconciled.
- *
- * `v1beta1` is not a stylistic preference: Kyma's API Gateway stopped reconciling it in 3.10
- * (Aug/Sep 2026), so a rule left on it has a spec nobody is acting on — the host may still
- * resolve from a stale Istio config and stop without warning on the next module restart.
- * `unknown` is a rule with no original-version annotation, which is the normal state for one
- * created directly as v2 by a recent client.
- */
-const VERSION_TONE: Record<string, 'ok' | 'warn' | 'bad' | 'unknown'> = {
-  v2: 'ok',
-  v2alpha1: 'warn',
-  v1beta1: 'bad',
-  unknown: 'unknown'
-};
-
-/** Fixed order, so the ledger reads oldest-to-newest rather than in object-key order. */
-const VERSION_ORDER = ['v1beta1', 'v2alpha1', 'v2', 'unknown'] as const;
-
 function NetworkingSection({ id }: { id: string }) {
   const { data, error, loading } = useAsync(useCallback(() => api.clusterNetworking(id), [id]), 0, id);
-  const [activeTab, setActiveTab] = useState<'apirules' | 'virtualservices' | 'ingresses' | 'services'>('apirules');
+  const [activeTab, setActiveTab] = useState<'ingresses' | 'gateways' | 'httproutes' | 'virtualservices' | 'services'>('ingresses');
 
   const payload = data?.ok ? data.data : undefined;
   const summary = payload?.summary;
@@ -140,38 +117,20 @@ function NetworkingSection({ id }: { id: string }) {
   // Lend this section's rows to the cluster-wide resource drawer while it is mounted.
   useRegisterResolver('networking', useMemo(() => makeNetworkingResolver(payload), [payload]));
 
-  const apirules = payload?.apirules ?? [];
-  const virtualservices = payload?.virtualservices ?? [];
   const ingresses = payload?.ingresses ?? [];
+  const gateways = payload?.gateways ?? [];
+  const httproutes = payload?.httproutes ?? [];
+  const virtualservices = payload?.virtualservices ?? [];
   const services = payload?.services ?? [];
 
-  /**
-   * `envelopeScope` would do for the other three sections, but the APIRule read publishes a
-   * *reason* the bare `unavailable` label cannot carry — and for this one read the reason is
-   * the whole point. "The API Gateway module is absent" and "the module is too old to serve
-   * v2" both arrive as a 404 and mean opposite things; the collector already distinguished
-   * them into `apirulesUnavailable`, so the rich entry is put **first** so that both
-   * `sentence()` (which takes the first entry with a detail) and `UnavailableNotice` (which
-   * keeps the first entry per label) show the cause instead of the fallback guess.
-   */
-  const scope = useMemo(() => {
-    if (!summary) return unavailableScope({});
-    const rich = summary.apirulesUnavailable ? [summary.apirulesUnavailable] : [];
-    return unavailableScope({
-      clusters: [
-        {
-          id,
-          ok: true,
-          unavailable: [...rich, ...unavailableEntries(summary)],
-          truncated: truncatedEntries(summary)
-        }
-      ]
-    });
-  }, [summary, id]);
+  // Gateway API and Istio are optional CRDs: a 404 on either is an honest zero from the collector,
+  // never an `unavailable` label, so only a refusal or a timeout greys their counts.
+  const scope = useMemo(() => envelopeScope(id, summary), [summary, id]);
 
-  const apiruleStatus = scope.of('APIRules', 'apirules');
+  const gatewayApiStatus = scope.of('Gateways', 'gateways');
+  const httprouteStatus = scope.of('HTTPRoutes', 'httproutes');
   const vsStatus = scope.of('VirtualServices', 'virtualservices');
-  const gatewayStatus = scope.of('Istio Gateways', 'istio-gateways');
+  const istioGatewayStatus = scope.of('Istio Gateways', 'istio-gateways');
   const ingressStatus = scope.of('Ingresses', 'ingresses');
   const serviceStatus = scope.of('Services', 'services');
 
@@ -192,14 +151,11 @@ function NetworkingSection({ id }: { id: string }) {
     );
   }
 
-  const byVersion = summary?.apirulesByVersion;
-  const needsMigration = summary?.apirulesNeedingMigration;
-
   /** A Service list can repeat a namespace/name pair, so the row's position is part of its key. */
   const serviceRows = services.map((s, idx) => ({ ...s, rowId: `${s.namespace}/${s.name}/${idx}` }));
 
   /*
-    The four row lists below are `DataTable`s rather than hand-rolled `<table className="tbl">`
+    The five row lists below are `DataTable`s rather than hand-rolled `<table className="tbl">`
     markup. They looked identical before — `.tbl` and the `cap-*` classes gave them the same borders,
     sticky header and ceilings — but they had none of the behaviour every other table in the console
     has: no sortable headers, no resizable or reorderable columns, no Columns menu, no wrap mode. A
@@ -210,85 +166,116 @@ function NetworkingSection({ id }: { id: string }) {
     `title` attributes are gone: `DataTable` derives the tooltip from a capped cell's own text, which
     is the same string those attributes were repeating by hand.
   */
-  const apiruleColumns: Column<(typeof apirules)[number]>[] = [
+  const gatewayColumns: Column<(typeof gateways)[number]>[] = [
     {
       key: 'name',
       header: 'Name',
       pin: true,
       max: '200px',
-      sortValue: ar => ar.name,
-      render: ar => <ResourceLink refTo={{ kind: 'APIRule', namespace: ar.namespace, name: ar.name }} />
+      sortValue: gw => gw.name,
+      render: gw => <ResourceLink refTo={{ kind: 'Gateway', namespace: gw.namespace, name: gw.name }} />
     },
     {
       key: 'ns',
       header: 'Namespace',
       max: '140px',
-      sortValue: ar => ar.namespace,
-      render: ar => <span className="text-muted">{ar.namespace}</span>
+      sortValue: gw => gw.namespace,
+      render: gw => <span className="text-muted">{gw.namespace}</span>
     },
     {
-      key: 'host',
-      header: 'Host URL',
-      max: '200px',
-      sortValue: ar => ar.host,
-      render: ar => <span className="font-mono text-[13px] text-accent">{ar.host}</span>
-    },
-    {
-      key: 'target',
-      header: 'Target Service',
+      key: 'class',
+      header: 'Class',
       max: '140px',
-      priority: 2,
-      sortValue: ar => ar.serviceName,
-      render: ar => (
-        <span className="text-muted">
-          {ar.serviceName}:{ar.servicePort}
+      sortValue: gw => gw.gatewayClassName,
+      render: gw => <span className="text-muted">{gw.gatewayClassName || '—'}</span>
+    },
+    {
+      key: 'listeners',
+      header: 'Listeners',
+      max: '260px',
+      sortValue: gw => gw.listeners[0]?.port ?? null,
+      render: gw => (
+        <span className="font-mono text-[13px] text-text">
+          <CellList
+            items={gw.listeners.map(
+              l => `${l.hostname || '*'}:${l.port ?? '—'}/${l.protocol ?? '—'}${l.tls ? ' (TLS)' : ''}`
+            )}
+          />
         </span>
       )
     },
     {
-      /*
-        Created-as, not served-as. Every row is *read* at v2 — that is what `servedVersion` says and
-        it is the same for all of them, so putting it in a column would spend width on a constant.
-        What differs per row is the version the object was authored at, and whether the spec shown
-        here came from the live `spec` or from the stored v1beta1 annotation the conversion webhook
-        left behind. The latter is worth surfacing: it is a spec no controller is currently
-        reconciling.
-      */
-      key: 'createdAs',
-      header: 'Created as',
-      // Sorted by risk, not alphabetically: the rows worth finding are the unreconciled ones.
-      sortValue: ar => `${ar.needsMigration ? 0 : 1} ${ar.originalVersion ?? 'unannotated'}`,
-      render: ar => (
-        <span className="inline-flex items-baseline gap-1.5">
-          <Pill tone={VERSION_TONE[ar.originalVersion ?? 'unknown'] ?? 'unknown'}>
-            {ar.originalVersion ?? 'unannotated'}
-          </Pill>
-          {ar.needsMigration && (
-            <span
-              className="text-[12px] font-medium text-bad"
-              title={`Created as v1beta1, which the API Gateway stopped reconciling in Kyma 3.10. The spec above came from ${ar.specSource}.`}
-            >
-              migrate
-            </span>
-          )}
+      // The controller's own `Programmed` condition. `null` is a controller that has not reported,
+      // which is not the same as one that refused the Gateway.
+      key: 'state',
+      header: 'Status',
+      sortValue: gw => (gw.programmed === false ? 0 : gw.programmed === null ? 1 : 2),
+      render: gw => (
+        <Pill tone={gw.programmed === true ? 'ok' : gw.programmed === false ? 'bad' : 'unknown'}>
+          {gw.programmed === true ? 'Programmed' : gw.programmed === false ? 'Not programmed' : 'Unreported'}
+        </Pill>
+      )
+    }
+  ];
+
+  const httprouteColumns: Column<(typeof httproutes)[number]>[] = [
+    {
+      key: 'name',
+      header: 'Name',
+      pin: true,
+      max: '200px',
+      sortValue: rt => rt.name,
+      render: rt => <ResourceLink refTo={{ kind: 'HTTPRoute', namespace: rt.namespace, name: rt.name }} />
+    },
+    {
+      key: 'ns',
+      header: 'Namespace',
+      max: '140px',
+      sortValue: rt => rt.namespace,
+      render: rt => <span className="text-muted">{rt.namespace}</span>
+    },
+    {
+      key: 'hosts',
+      header: 'Hostnames',
+      max: '260px',
+      sortValue: rt => rt.hostnames[0] ?? null,
+      render: rt => (
+        <span className="font-mono text-[13px] text-text">
+          <CellList items={rt.hostnames} empty="any" />
+        </span>
+      )
+    },
+    {
+      key: 'parents',
+      header: 'Gateways',
+      max: '200px',
+      priority: 2,
+      sortValue: rt => rt.parents[0] ?? null,
+      render: rt => (
+        <span className="text-muted">
+          <CellList items={rt.parents} />
+        </span>
+      )
+    },
+    {
+      key: 'backends',
+      header: 'Backends',
+      max: '260px',
+      sortValue: rt => rt.backends[0]?.name ?? null,
+      render: rt => (
+        <span className="font-mono text-[13px] text-muted">
+          <CellList items={rt.backends.map(b => `${b.name}${b.port ? `:${b.port}` : ''}`)} />
         </span>
       )
     },
     {
       key: 'state',
       header: 'Status',
-      sortValue: ar => ar.state,
-      render: ar => <Pill tone={ar.state === 'OK' || ar.state === 'Ready' ? 'ok' : 'unknown'}>{ar.state}</Pill>
-    },
-    {
-      key: 'auth',
-      header: 'Auth Handler',
-      priority: 2,
-      sortValue: ar => ar.paths[0]?.accessStrategies.join(', ') || 'noop',
-      render: ar => (
-        <span className="rounded bg-raised px-2 py-0.5 font-mono text-[12px] text-text">
-          {ar.paths[0]?.accessStrategies.join(', ') || 'noop'}
-        </span>
+      sortValue: rt => (rt.accepted === false ? 0 : rt.accepted === null ? 1 : 2),
+      render: rt => (
+        <Pill tone={rt.accepted === true ? 'ok' : rt.accepted === false ? 'bad' : 'unknown'}>
+          {rt.accepted === true ? 'Accepted' : rt.accepted === false ? 'Not accepted' : 'Unreported'}
+        </Pill>
       )
     }
   ];
@@ -459,29 +446,32 @@ function NetworkingSection({ id }: { id: string }) {
     <div>
       <div className="mb-3 grid grid-cols-3 gap-4 lg:grid-cols-5">
         <StatTile
-          label="Kyma APIRules"
-          status={apiruleStatus}
-          value={<Count status={apiruleStatus} value={summary?.apirulesCount ?? null} size="lg" />}
-          caption="Gateway endpoints — all read as v2"
+          label="Ingresses"
+          status={ingressStatus}
+          value={<Count status={ingressStatus} value={summary?.ingressesCount ?? null} size="lg" />}
+          caption="networking.k8s.io/v1 routes"
         />
         <StatTile
-          label="Need migration"
-          status={apiruleStatus}
-          value={<Count status={apiruleStatus} value={needsMigration ?? null} size="lg" />}
-          caption="Created as v1beta1, which the API Gateway no longer reconciles"
-          valueClass={(needsMigration ?? 0) > 0 ? 'text-bad' : 'text-text'}
+          label="Gateways"
+          status={gatewayApiStatus}
+          value={<Count status={gatewayApiStatus} value={summary?.gatewaysCount ?? null} size="lg" />}
+          caption="Gateway API listeners"
         />
         <StatTile
-          label="Istio Gateways"
-          status={gatewayStatus}
-          value={<Count status={gatewayStatus} value={summary?.gatewaysCount ?? null} size="lg" />}
-          caption="Binding integrity is under Istio & Mesh"
+          label="HTTPRoutes"
+          status={httprouteStatus}
+          value={<Count status={httprouteStatus} value={summary?.httproutesCount ?? null} size="lg" />}
+          caption="Gateway API routes"
         />
         <StatTile
           label="VirtualServices"
           status={vsStatus}
           value={<Count status={vsStatus} value={summary?.virtualServicesCount ?? null} size="lg" />}
-          caption="Mesh routing rules"
+          caption={
+            istioGatewayStatus.state === 'unavailable'
+              ? 'Istio Gateway count not reported'
+              : `Mesh routing rules · ${summary?.istioGatewaysCount ?? 0} Istio Gateway(s)`
+          }
         />
         <StatTile
           label="Services"
@@ -491,35 +481,13 @@ function NetworkingSection({ id }: { id: string }) {
         />
       </div>
 
-      {/*
-        The version ledger. A strip rather than four more tiles: it is one fact split four
-        ways, and at this density another row of card containers would read as four unrelated
-        metrics. Hidden entirely when the read failed — a ledger of zeros is the false
-        confidence this console exists to avoid, and the tiles above already say so.
-      */}
-      {byVersion && apiruleStatus.state !== 'unavailable' && (
-        <div className="mb-4 flex flex-wrap items-center gap-x-5 gap-y-1 border-y border-line py-2 text-[13px]">
-          <span className="text-[12px] font-semibold uppercase tracking-[0.06em] text-muted">Created as</span>
-          {VERSION_ORDER.map(v => (
-            <span key={v} className="inline-flex items-baseline gap-1.5">
-              <Pill tone={VERSION_TONE[v] ?? 'unknown'}>{v}</Pill>
-              <span className={`mono ${byVersion[v] > 0 ? 'text-text' : 'text-muted'}`}>{byVersion[v]}</span>
-            </span>
-          ))}
-          <span className="text-muted">
-            {(needsMigration ?? 0) > 0
-              ? 'v1beta1 rules are served from a stored spec and are not being reconciled'
-              : 'nothing is left on the unreconciled v1beta1'}
-          </span>
-        </div>
-      )}
-
       <div className="mb-3 flex gap-2 border-b border-line pb-3">
         {(
           [
-            ['apirules', 'APIRules', apiruleStatus, apirules.length],
-            ['virtualservices', 'VirtualServices', vsStatus, virtualservices.length],
             ['ingresses', 'Ingresses', ingressStatus, ingresses.length],
+            ['gateways', 'Gateways', gatewayApiStatus, gateways.length],
+            ['httproutes', 'HTTPRoutes', httprouteStatus, httproutes.length],
+            ['virtualservices', 'VirtualServices', vsStatus, virtualservices.length],
             ['services', 'Services', serviceStatus, services.length]
           ] as const
         ).map(([key, label, status, count]) => (
@@ -535,17 +503,6 @@ function NetworkingSection({ id }: { id: string }) {
           </button>
         ))}
       </div>
-
-      {activeTab === 'apirules' && (
-        <DataTable
-          columns={apiruleColumns}
-          rows={apirules}
-          rowKey={ar => ar.id}
-          empty={
-            apiruleStatus.state === 'ok' ? 'No APIRules found' : <UnavailableEmptyBody status={apiruleStatus} />
-          }
-        />
-      )}
 
       {activeTab === 'virtualservices' && (
         <DataTable
@@ -563,6 +520,28 @@ function NetworkingSection({ id }: { id: string }) {
           rowKey={ing => ing.id}
           empty={
             ingressStatus.state === 'ok' ? 'No Ingresses found' : <UnavailableEmptyBody status={ingressStatus} />
+          }
+        />
+      )}
+
+      {activeTab === 'gateways' && (
+        <DataTable
+          columns={gatewayColumns}
+          rows={gateways}
+          rowKey={gw => gw.id}
+          empty={
+            gatewayApiStatus.state === 'ok' ? 'No Gateways found' : <UnavailableEmptyBody status={gatewayApiStatus} />
+          }
+        />
+      )}
+
+      {activeTab === 'httproutes' && (
+        <DataTable
+          columns={httprouteColumns}
+          rows={httproutes}
+          rowKey={rt => rt.id}
+          empty={
+            httprouteStatus.state === 'ok' ? 'No HTTPRoutes found' : <UnavailableEmptyBody status={httprouteStatus} />
           }
         />
       )}

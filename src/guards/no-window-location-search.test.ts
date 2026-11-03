@@ -11,7 +11,7 @@ const FAKE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '
  * The console reads its query string from the router, never from `window.location`.
  *
  * It mounts under HashRouter, so a page's parameters live after the `#`
- * (`/kyma-fleet-dashboard/#/clusters/x?tab=network&section=outbound`) and `window.location.search`
+ * (`/fleet-dashboard/#/clusters/x?tab=network&section=outbound`) and `window.location.search`
  * is the empty string on every page. A read of it is a filter that never applies, with no error and
  * no failing test: the Outbound failures card on Network Operations → Overview linked to a filter
  * that `TracesTab` could never see, so the link opened the unfiltered list. `useSearchParams()` is

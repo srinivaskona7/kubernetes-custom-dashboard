@@ -391,7 +391,7 @@ describe('hpaStatus', () => {
   });
 
   /*
-    Found live on platform-sbx: three Kyma HPAs at min 2 = max 2, running at 7–30% of target, with
+    Found live on platform-sbx: three platform HPAs at min 2 = max 2, running at 7–30% of target, with
     `ScalingLimited=True (TooFewReplicas)` — the controller holding them *up* at their minimum. The
     counts said current >= max, so the pill read an amber `At ceiling` about autoscalers with no load
     pressure at all. The reason says which bound, and min == max says neither bound can move.

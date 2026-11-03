@@ -45,11 +45,11 @@ export function useSection<Id extends string>(
 /**
  * The same hook on a caller-chosen URL key, for a second level of nesting.
  *
- * Security & Compliance → Admission & Policy → OPA Overview is three levels deep, and the two
- * inner ones cannot share `?section=`: whichever wrote last would knock the other back to its
- * fallback on every click. So the nested strip gets its own key (`?opa=`), which also keeps the
- * two independent — arriving on `?section=admission&opa=violations` restores both, and
- * `?section=compliance&opa=violations` is harmless because the OPA strip is not mounted to read it.
+ * A tab → section → nested view is three levels deep, and the two inner ones cannot share
+ * `?section=`: whichever wrote last would knock the other back to its fallback on every click. So
+ * the nested strip gets its own key (`?view=`, say), which also keeps the two independent —
+ * arriving on `?section=a&view=b` restores both, and `?section=c&view=b` is harmless because the
+ * nested strip is not mounted to read it.
  *
  * `keep` is the escape hatch for a nested strip whose sections are views of one already-selected
  * thing: those must not drop `?res=`, because the drawer IS the thing being viewed.

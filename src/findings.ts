@@ -11,13 +11,13 @@
  *
  * The shared finding surface (a `FindingLink` used by every tab, a fleet-wide findings index) is
  * still outstanding. The temptation while building the first screen that needs findings is to
- * write an OPA-shaped drilldown and move on — and that produces exactly the throwaway that cannot
+ * write a one-off drilldown and move on — and that produces exactly the throwaway that cannot
  * migrate: an `onClick` closure that sets local component state has no id, no severity and no
  * serialisable destination, so the later shared version cannot adopt it without rewriting every
  * call site.
  *
- * So the descriptor is defined here, in the shape the shared version needs, and OPA is its first
- * consumer. What is deliberately NOT here yet: the cross-tab registry, and the fleet-level
+ * So the descriptor is defined here, in the shape the shared version needs, and the first screen
+ * that needs findings is its first consumer. What is deliberately NOT here yet: the cross-tab registry, and the fleet-level
  * aggregation. Those are additive — they consume `Finding[]`, and nothing below changes when they
  * arrive.
  *
@@ -91,7 +91,7 @@ export interface Finding {
   subjects?: FindingSubject[];
   destination: FindingDestination;
   freshness?: FindingFreshness;
-  /** Which read produced this — `gatekeeper-audit`, `admission-metric`, `constraint-status`. */
+  /** Which read produced this — `pod-status`, `event`, `certificate-status`. */
   source: string;
 }
 

@@ -4,17 +4,14 @@
  * ## Why this exists
  *
  * An egress line through TLS passthrough carries an IP and nothing else: `requested_server_name`
- * and `authority` are null on the platformsbx format, so the Traces map drew `18.213.242.208:443`
- * where an operator needed "XSUAA". Forward DNS is no answer — one shared BTP load balancer IP
- * serves many hostnames, and ELB addresses rotate. The cluster already says who these addresses
- * are, in three places, and this module reads only those:
+ * and `authority` are null in many access-log formats, so the Traces map drew `18.213.242.208:443`
+ * where an operator needed the service's name. Forward DNS is no answer — one shared SaaS load
+ * balancer IP serves many hostnames, and ELB addresses rotate. The cluster already says who these
+ * addresses are, in three places, and this module reads only those:
  *
  *   networkpolicy   operators annotate their egress NetworkPolicies with the IPs each allowed
- *                   service resolves to (`xsuaa-service-instances-us10: "3.214.110.153, ..."`).
- *                   Gatekeeper's policies carry the same thing as prose.
- *   telemetry       a Kyma telemetry gateway exports only to its pipelines' outputs, and the
- *                   output's `secretKeyRef` leads to a BTP ServiceBinding whose ServiceInstance
- *                   names the offering (`cloud-logging`). The Secret's value is never read.
+ *                   service resolves to (`idp-us10: "3.214.110.153, ..."`), or describe them in
+ *                   prose.
  *   networkpolicy-ipblock  the egress rules themselves: `spec.egress[].to[].ipBlock`. A `/32`
  *                   names that address; a wider block names what falls inside it (longest
  *                   prefix first, `except` honoured); `0.0.0.0/0` declares nothing and names nothing.
@@ -44,28 +41,15 @@ const MAX_LB_HOSTNAMES = 4;
 const DNS_NAME = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/i;
 
 /**
- * A readable service name for an annotation key or a BTP offering. Only the family is named; the
- * key itself always travels with it as `key`, because it is the operator's word, not ours.
+ * A readable name for an annotation key. Only the Kubernetes API server is given a name of ours;
+ * every other key is the operator's word and is shown as written. The key itself always travels
+ * with it as `key`.
  */
-const FAMILIES = [
-  [/^xsuaa/i, 'SAP Authorization and Trust (XSUAA)'],
-  [/^hana/i, 'SAP HANA Cloud'],
-  [/^destination/i, 'SAP Destination service'],
-  [/^connectivity/i, 'SAP Connectivity service'],
-  [/^cloud-logging|^cls\b/i, 'SAP Cloud Logging'],
-  [/^credstore/i, 'SAP Credential Store'],
-  [/^apiserver/i, 'Kubernetes API server']
-];
-const REGION = /-((?:us|eu|ap|jp|br|ca|ch|cn|in|il|sa|ae)\d{2})$/i;
-
 function displayOf(key) {
   const k = String(key || '').replace(/^.*\//, '');
-  const family = FAMILIES.find(([re]) => re.test(k));
-  if (!family) return k;
+  if (!/^apiserver/i.test(k)) return k;
   const apiserver = /^apiserver-(.+)$/i.exec(k);
-  if (apiserver) return `${family[1]} (${apiserver[1]})`;
-  const region = REGION.exec(k);
-  return region ? `${family[1]} · ${region[1].toLowerCase()}` : family[1];
+  return apiserver ? `Kubernetes API server (${apiserver[1]})` : 'Kubernetes API server';
 }
 
 function validIp(ip) {
@@ -153,76 +137,6 @@ function add(byIp, ip, name) {
 }
 
 /**
- * Where the telemetry gateways export to, from the pipelines' outputs.
- *
- * `valueFrom.secretKeyRef` is followed to the ServiceBinding that owns the Secret (the btp-operator
- * names the Secret `spec.secretName`) and on to its ServiceInstance's `serviceOfferingName`. A
- * literal `value` names its host directly. Nothing is inferred when a link is missing: the export
- * is then named by the Secret reference alone, which is still the operator's own object.
- */
-function telemetryExport({ pipelines = [], serviceBindings = null, serviceInstances = null }) {
-  /* Every pipeline kind must be read: with TracePipelines unread, a trace gateway's export to
-     another backend would take the LogPipelines' name. A 404 is a true zero and stays readable. */
-  if (!pipelines.length || pipelines.some(p => !p || p.unavailable)) return null;
-  const readable = pipelines;
-  const outputs = new Map();
-  for (const list of readable) {
-    for (const p of list.items || []) {
-      const otlp = (((p || {}).spec || {}).output || {}).otlp;
-      const ep = otlp && otlp.endpoint;
-      if (!ep) continue;
-      let key;
-      let target;
-      if (ep.valueFrom && ep.valueFrom.secretKeyRef) {
-        const ref = ep.valueFrom.secretKeyRef;
-        key = `secret:${ref.namespace}/${ref.name}`;
-        target = { kind: 'secret', namespace: ref.namespace || null, name: ref.name || null, key: ref.key || null };
-      } else if (typeof ep.value === 'string' && ep.value) {
-        let host = null;
-        try { host = new URL(ep.value).hostname; } catch { host = ep.value.split(/[/:]/)[0] || null; }
-        key = `host:${host}`;
-        target = { kind: 'host', host };
-      } else {
-        continue;
-      }
-      const o = outputs.get(key) || { ...target, pipelines: [] };
-      o.pipelines.push(`${p.kind || 'Pipeline'}/${p.metadata && p.metadata.name}`);
-      outputs.set(key, o);
-    }
-  }
-  if (!outputs.size) return null;
-
-  const bindings = serviceBindings && !serviceBindings.unavailable ? serviceBindings.items || [] : null;
-  const instances = serviceInstances && !serviceInstances.unavailable ? serviceInstances.items || [] : null;
-  const named = [...outputs.values()].map(o => {
-    if (o.kind !== 'secret' || !bindings || !instances) return { ...o, offering: null, instance: null };
-    const b = bindings.find(
-      x => x.metadata && x.metadata.namespace === o.namespace && ((x.spec || {}).secretName || x.metadata.name) === o.name
-    );
-    const inst = b && instances.find(i => i.metadata && i.metadata.namespace === o.namespace && i.metadata.name === (b.spec || {}).serviceInstanceName);
-    const offering = inst ? (inst.spec || {}).serviceOfferingName || null : null;
-    return { ...o, offering, instance: inst ? `${o.namespace}/${inst.metadata.name}` : null, binding: b ? `${o.namespace}/${b.metadata.name}` : null };
-  });
-
-  // One output is a name. Several different ones are a list, and the gateway's connection could
-  // be to any of them, so the label says so rather than picking.
-  const labels = [...new Set(named.map(o => (o.offering ? displayOf(o.offering) : o.kind === 'host' ? o.host : `${o.namespace}/${o.name}`)))];
-  return {
-    label: labels.length === 1 ? labels[0] : `Telemetry export (${labels.length} outputs)`,
-    display: labels.length === 1 ? `${labels[0]} (telemetry export)` : `Telemetry export: ${labels.join(', ')}`,
-    source: 'telemetry',
-    outputs: named,
-    objects: named.flatMap(o => o.pipelines)
-  };
-}
-
-/** A caller that exports telemetry: Kyma's OTLP/log/trace/metric gateways and agents. */
-function isTelemetryExporter(caller) {
-  if (!caller || caller.namespace !== 'kyma-system') return false;
-  return /^telemetry-(otlp|log|trace|metric|fluent)[\w-]*(gateway|agent)/.test(caller.name || '');
-}
-
-/**
  * Resolve the ingress LB's hostnames, cached per hostname. A failure is cached too, for the same
  * TTL, so a resolver outage costs one timeout per five minutes rather than one per request.
  */
@@ -231,7 +145,7 @@ const lbCache = new Map();
   Only a cloud provider's load-balancer name is resolved. The hostname is read from a Service status
   anyone with write access to that cluster can set, and srv resolves it with the hub's own resolver:
   an internal name (`*.svc.cluster.local`, `*.internal`, a split-horizon corporate zone) would publish
-  the hub's private DNS answers to every viewer. Gardener providers that report hostnames are AWS.
+  the hub's private DNS answers to every viewer. AWS is the provider that reports hostnames.
 */
 const PROVIDER_LB_SUFFIX = /\.elb\.amazonaws\.com(\.cn)?$|\.elb\.[a-z0-9-]+\.amazonaws\.com(\.cn)?$/i;
 function isProviderLbHostname(h) {
@@ -286,13 +200,10 @@ function lbEntries(services) {
  *
  * @param {object} args
  * @param {object} [args.networkPolicies] a safeList result, full objects: ipBlocks live in `spec.egress`
- * @param {object[]} [args.pipelines]     safeList results for log/trace/metric pipelines
- * @param {object} [args.serviceBindings] a safeList result
- * @param {object} [args.serviceInstances] a safeList result
  * @param {object} [args.services]        a safeList result; the ingress gateway's LB is read from it
  * @param {object[]} [args.lbDns]         `resolveLbHostnames` output
  */
-function buildNameIndex({ networkPolicies = null, pipelines = [], serviceBindings = null, serviceInstances = null, services = null, lbDns = [] } = {}) {
+function buildNameIndex({ networkPolicies = null, services = null, lbDns = [] } = {}) {
   const byIp = new Map();
 
   if (networkPolicies && !networkPolicies.unavailable) {
@@ -363,32 +274,29 @@ function buildNameIndex({ networkPolicies = null, pipelines = [], serviceBinding
   return {
     byIp,
     ranges,
-    telemetry: telemetryExport({ pipelines, serviceBindings, serviceInstances }),
     // `ips` are the addresses a provider publishes directly (Azure, GCP); `dns` resolves ELB names.
     lb: { services: lb.services, ips: [...new Set(lb.ips.map(x => x.ip))], hostnames: lb.hostnames.map(h => h.hostname), dns: lbDns || [] },
     sources: {
       networkPolicies: !networkPolicies ? 'not-read' : networkPolicies.unavailable ? 'unavailable' : 'ok',
-      pipelines: !pipelines.length ? 'not-read' : pipelines.every(p => !p || p.unavailable) ? 'unavailable' : pipelines.some(p => !p || p.unavailable) ? 'partial' : 'ok',
       lbDns: (lbDns || []).some(d => d.error) ? 'partial' : 'ok'
     }
   };
 }
 
 /**
- * The name for one address, or null. `caller` is the workload that opened the connection, when
- * known: a telemetry gateway's external connection is its export, whatever the IP. `ranges: false`
- * skips the ipBlock ranges: an ingress Host that is a public IP is a client's dial, not an egress.
+ * The name for one address, or null. `ranges: false` skips the ipBlock ranges: an ingress Host
+ * that is a public IP is a client's dial, not an egress.
  *
  * @returns {{display: string, label: string, source: string, key: string|null, qualifier: string|null,
  *   objects: string[], others: string[], ambiguous?: true}|null}
  */
-function nameOf(index, ip, { caller = null, ranges = true } = {}) {
+function nameOf(index, ip, { ranges = true } = {}) {
   if (!index || !ip) return null;
   const list = index.byIp.get(ip);
   if (list && list.length) {
     const [top, ...rest] = list;
-    /* Two policies of equal standing naming one address differently (apiserver-apppfkymaut and
-       apiserver-platformsbx share IPs) is a conflict the sort would settle by object count or
+    /* Two policies of equal standing naming one address differently (apiserver-cluster-a and
+       apiserver-cluster-b share IPs) is a conflict the sort would settle by object count or
        alphabet. Name every claimant rather than guess one. */
     const ties = rest.filter(n => RANK[n.source] === RANK[top.source] && n.display !== top.display);
     // An ipBlock entry that took an annotation's name is provenance, not a second name.
@@ -406,10 +314,6 @@ function nameOf(index, ip, { caller = null, ranges = true } = {}) {
     }
     return { ...top, others: distinct.map(n => n.display) };
   }
-  if (index.telemetry && isTelemetryExporter(caller)) {
-    const t = index.telemetry;
-    return { display: t.display, label: t.label, source: t.source, key: null, qualifier: null, objects: t.objects, others: [], namespace: null, policyName: null, cidr: null };
-  }
   if (ranges && index.ranges && index.ranges.length && validIp(ip)) {
     const n = ipv4ToInt(ip);
     const hit = index.ranges.find(r => inCidr(r, n) && !r.except.some(e => inCidr(e, n)));
@@ -426,20 +330,14 @@ function ipOfNode(node) {
   return m ? m[1] : null;
 }
 
-/**
- * Put names on a service map's external nodes, in place. A node is named when its address is, or
- * when every caller of it is a telemetry exporter and the pipelines are readable.
- */
+/** Put names on a service map's external nodes, in place. A node is named when its address is. */
 function nameServiceMap(serviceMap, index) {
   if (!serviceMap || !index) return serviceMap;
-  const byId = new Map(serviceMap.nodes.map(n => [n.id, n]));
   for (const node of serviceMap.nodes) {
     if (node.kind !== 'external') continue;
     const ip = ipOfNode(node);
     if (!ip) continue;
-    const callers = serviceMap.edges.filter(e => e.to === node.id).map(e => byId.get(e.from)).filter(Boolean);
-    const exporter = callers.length > 0 && callers.every(isTelemetryExporter) ? callers[0] : null;
-    const n = nameOf(index, ip, { caller: exporter });
+    const n = nameOf(index, ip);
     if (n) node.destination = n;
   }
   return serviceMap;
@@ -453,24 +351,19 @@ function nameNodeRefs(rows, index) {
     if (!to || to.kind !== 'external') continue;
     const ip = ipOfNode(to);
     if (!ip) continue;
-    const n = nameOf(index, ip, { caller: row.from || null });
+    const n = nameOf(index, ip);
     if (n) to.destination = n;
   }
   return rows;
 }
 
-/**
- * Traffic → Failing requests: a group's external upstream, named like a Traces node. The callers are
- * the proxies that logged it, so a telemetry gateway's export is named by caller as elsewhere.
- */
+/** Traffic → Failing requests: a group's external upstream, named like a Traces node. */
 function nameFailureGroups(groups, index) {
   if (!Array.isArray(groups) || !index) return groups;
   for (const g of groups) {
     const d = g && g.destination;
     if (!d || d.kind !== 'external' || !d.ip) continue;
-    const callers = (g.proxies || []).map(p => ({ namespace: p.namespace, name: p.pod || p.name }));
-    const exporter = callers.length > 0 && callers.every(isTelemetryExporter) ? callers[0] : null;
-    const n = nameOf(index, d.ip, { caller: exporter });
+    const n = nameOf(index, d.ip);
     if (n) d.destination = n;
   }
   return groups;
@@ -490,8 +383,7 @@ function nameEndpointHosts(rows, index) {
 
 /**
  * Traces → a journey's hops: an external `to` gets its name, or `undeclared` when no object names
- * it. The caller is the proxy that logged the hop, so a telemetry gateway's export is named by
- * caller as on the map. `from` is never touched: `callerOf` already removed any client address.
+ * it. `from` is never touched: `callerOf` already removed any client address.
  */
 function nameHopEndpoints(traces, index) {
   if (!Array.isArray(traces) || !index) return traces;
@@ -499,8 +391,7 @@ function nameHopEndpoints(traces, index) {
     for (const h of (t && t.hops) || []) {
       const to = h && h.to;
       if (!to || to.kind !== 'external' || !to.ip) continue;
-      const caller = h.observedBy ? { namespace: h.observedBy.namespace, name: h.observedBy.pod } : null;
-      const n = nameOf(index, to.ip, { caller: caller && isTelemetryExporter(caller) ? caller : null });
+      const n = nameOf(index, to.ip);
       if (n) to.destination = n;
       else to.undeclared = true;
     }
@@ -508,10 +399,7 @@ function nameHopEndpoints(traces, index) {
   return traces;
 }
 
-/**
- * Every named destination in the index, one row per name, with the addresses it covers. The
- * telemetry export has no address of its own (it is named by caller), so it lists none.
- */
+/** Every named destination in the index, one row per name, with the addresses it covers. */
 function namedDestinations(index) {
   if (!index) return [];
   const rows = new Map();
@@ -529,18 +417,12 @@ function namedDestinations(index) {
   for (const r of index.ranges || []) {
     out.push({ display: r.display, label: 'ipblock-range', source: 'networkpolicy-ipblock', ips: [r.cidr], objects: r.objects });
   }
-  if (index.telemetry) out.push({ display: index.telemetry.display, label: index.telemetry.label, source: index.telemetry.source, ips: [], objects: index.telemetry.objects });
   return out.sort((a, b) => a.display.localeCompare(b.display));
 }
 
 /** The list reads this module needs, as safeList arguments. NetworkPolicies are read whole: spec.egress is not in PartialObjectMetadata. */
 const NAME_READS = {
-  networkPolicies: { path: '/apis/networking.k8s.io/v1/networkpolicies?limit=1000', label: 'networkpolicies' },
-  logPipelines: { path: '/apis/telemetry.kyma-project.io/v1alpha1/logpipelines', label: 'logpipelines' },
-  tracePipelines: { path: '/apis/telemetry.kyma-project.io/v1alpha1/tracepipelines', label: 'tracepipelines' },
-  metricPipelines: { path: '/apis/telemetry.kyma-project.io/v1alpha1/metricpipelines', label: 'metricpipelines' },
-  serviceBindings: { path: '/apis/services.cloud.sap.com/v1/servicebindings?limit=1000', label: 'servicebindings' },
-  serviceInstances: { path: '/apis/services.cloud.sap.com/v1/serviceinstances?limit=1000', label: 'serviceinstances' }
+  networkPolicies: { path: '/apis/networking.k8s.io/v1/networkpolicies?limit=1000', label: 'networkpolicies' }
 };
 
 /**
@@ -550,22 +432,15 @@ const NAME_READS = {
  */
 function readNameSources({ listFn, baseCtx, safeList, metadataAccept }) {
   const read = r => safeList(listFn, r.metadataOnly ? { ...baseCtx, accept: metadataAccept } : baseCtx, r.path, r.label);
-  return Promise.all([
-    read(NAME_READS.networkPolicies),
-    read(NAME_READS.logPipelines),
-    read(NAME_READS.tracePipelines),
-    read(NAME_READS.metricPipelines),
-    read(NAME_READS.serviceBindings),
-    read(NAME_READS.serviceInstances)
-  ]);
+  return Promise.all([read(NAME_READS.networkPolicies)]);
 }
 
 /** Resolve the LB hostnames (cached) and build the index. `reads` is `readNameSources`' result. */
 async function finishNameIndex(reads, services, { resolve4 } = {}) {
-  const [networkPolicies, logs, traces, metrics, serviceBindings, serviceInstances] = reads;
+  const [networkPolicies] = reads;
   const lb = lbEntries(services);
   const lbDns = await resolveLbHostnames(lb.hostnames.map(h => h.hostname), resolve4 ? { resolve4 } : undefined);
-  const index = buildNameIndex({ networkPolicies, pipelines: [logs, traces, metrics], serviceBindings, serviceInstances, services, lbDns });
+  const index = buildNameIndex({ networkPolicies, services, lbDns });
   /** The safeList results, so a caller can fold their `unavailable` / `truncated` into its own. */
   index.reads = reads;
   return index;
@@ -586,8 +461,6 @@ export default {
   isProviderLbHostname,
   parseAnnotation,
   displayOf,
-  telemetryExport,
-  isTelemetryExporter,
   resolveLbHostnames,
   lbEntries,
   NAME_READS,

@@ -28,7 +28,7 @@
 export type ThemePref = 'system' | 'dark' | 'light';
 export type Theme = 'dark' | 'light';
 
-const STORAGE_KEY = 'kyma-fleet:theme';
+const STORAGE_KEY = 'k8s-fleet:theme';
 
 /** Every value the preference is allowed to take, so a hand-edited localStorage cannot break boot. */
 const PREFS: readonly ThemePref[] = ['system', 'dark', 'light'];

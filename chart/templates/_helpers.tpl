@@ -1,14 +1,14 @@
 {{/*
-Expand the name of the chart.
+Expand the chart name.
 */}}
-{{- define "btp-kyma-fleet-dashboard.name" -}}
+{{- define "k8s-fleet-dashboard.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
-Create a default fully qualified app name.
+Fully qualified app name.
 */}}
-{{- define "btp-kyma-fleet-dashboard.fullname" -}}
+{{- define "k8s-fleet-dashboard.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -22,39 +22,56 @@ Create a default fully qualified app name.
 {{- end }}
 
 {{/*
-Create chart label.
+Chart label value.
 */}}
-{{- define "btp-kyma-fleet-dashboard.chart" -}}
+{{- define "k8s-fleet-dashboard.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels.
 */}}
-{{- define "btp-kyma-fleet-dashboard.labels" -}}
-helm.sh/chart: {{ include "btp-kyma-fleet-dashboard.chart" . }}
-{{ include "btp-kyma-fleet-dashboard.selectorLabels" . }}
+{{- define "k8s-fleet-dashboard.labels" -}}
+helm.sh/chart: {{ include "k8s-fleet-dashboard.chart" . }}
+{{ include "k8s-fleet-dashboard.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- with .Values.commonLabels }}
+{{ toYaml . }}
+{{- end }}
 {{- end }}
 
 {{/*
-Selector labels.
+Selector labels. Never change these without a Deployment recreation.
 */}}
-{{- define "btp-kyma-fleet-dashboard.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "btp-kyma-fleet-dashboard.name" . }}
+{{- define "k8s-fleet-dashboard.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "k8s-fleet-dashboard.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 ServiceAccount name.
 */}}
-{{- define "btp-kyma-fleet-dashboard.serviceAccountName" -}}
+{{- define "k8s-fleet-dashboard.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "btp-kyma-fleet-dashboard.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "k8s-fleet-dashboard.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
+{{- end }}
+
+{{/*
+ClusterRole name.
+*/}}
+{{- define "k8s-fleet-dashboard.clusterRoleName" -}}
+{{- default (printf "%s-reader" (include "k8s-fleet-dashboard.fullname" .)) .Values.rbac.clusterRole.name }}
+{{- end }}
+
+{{/*
+Image reference, tolerating an empty tag.
+*/}}
+{{- define "k8s-fleet-dashboard.image" -}}
+{{- printf "%s:%s" .Values.image.repository (.Values.image.tag | default .Chart.AppVersion) }}
 {{- end }}

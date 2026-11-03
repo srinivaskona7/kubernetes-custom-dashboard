@@ -116,8 +116,8 @@ describe('topFigures', () => {
 });
 
 describe('scopeConsumers', () => {
-  const pods = [pod({ name: 'a', namespace: 'app' }), pod({ name: 'k', namespace: 'kyma-system' })];
-  const system = new Set(['kyma-system']);
+  const pods = [pod({ name: 'a', namespace: 'app' }), pod({ name: 'k', namespace: 'platform-system' })];
+  const system = new Set(['platform-system']);
   it('hides system namespaces when the toggle is off', () => {
     expect(scopeConsumers(pods, system, false, new Set()).map(p => p.name)).toEqual(['a']);
   });
@@ -127,7 +127,7 @@ describe('scopeConsumers', () => {
   it('keeps an explicitly selected system namespace', () => {
     // Only the system rule lives here; the namespace selection itself is applied upstream by
     // `filterByNamespace`, as on the Pods sub-tab.
-    expect(scopeConsumers(pods, system, false, new Set(['kyma-system'])).map(p => p.name)).toEqual(['a', 'k']);
+    expect(scopeConsumers(pods, system, false, new Set(['platform-system'])).map(p => p.name)).toEqual(['a', 'k']);
   });
 });
 

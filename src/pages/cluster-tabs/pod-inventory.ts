@@ -4,7 +4,7 @@
  * This is pure and lives in its own module for one reason — the interesting part is not the
  * rendering, it is *ownership*, and ownership here is not a fact the backend supplies. The pods
  * inside a `WorkloadRow` were matched by **label selector**, and selectors overlap. Three
- * Deployments in `kyma-system` share `control-plane: controller-manager`, so one pod legitimately
+ * Deployments in `platform-system` share `control-plane: controller-manager`, so one pod legitimately
  * appears under all three, and the naive flatten rendered it three times until React complained
  * about the duplicate key.
  *

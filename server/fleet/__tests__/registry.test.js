@@ -169,7 +169,7 @@ test('validate rejects an id that could escape the token mount', () => {
 
 test('validate fills the defaults the collectors assume', () => {
   const c = validate({ id: 'x', apiUrl: 'https://x.example.com/' }, 0);
-  assert.equal(c.namespace, 'kyma-fleet');
+  assert.equal(c.namespace, 'fleet-dashboard');
   assert.equal(c.serviceAccount, 'fleet-reader');
   assert.equal(c.enabled, true);
   assert.equal(c.apiUrl, 'https://x.example.com', 'a trailing slash would double up in every path');

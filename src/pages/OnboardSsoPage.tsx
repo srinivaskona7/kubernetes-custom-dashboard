@@ -549,7 +549,7 @@ export default function OnboardSsoPage({ onRefreshed }: PageProps) {
                         <Dot tone="bad" />
                         <span>
                           This callback is plain <code className="mono">http</code> on a public host.
-                          Identity providers refuse to register that — SAP IAS among them — and where
+                          Identity providers refuse to register that — many hosted ones among them — and where
                           one does not, the authorization code travels in the clear. Point{' '}
                           <code className="mono">FLEET_SSO_CALLBACK_URL</code> at the console's{' '}
                           <code className="mono">https</code> origin instead.

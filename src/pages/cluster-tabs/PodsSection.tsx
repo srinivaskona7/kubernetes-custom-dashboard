@@ -445,7 +445,7 @@ export function PodsSection({
           label="Show system pods"
           checked={showSystem}
           onChange={onShowSystem}
-          title="Shows pods in the namespaces the server classifies as system (Kubernetes, Istio, Kyma and the bootstrap tooling). A namespace you selected is always shown."
+          title="Shows pods in the namespaces the server classifies as system (Kubernetes, Istio, platform operators and the bootstrap tooling). A namespace you selected is always shown."
         />
         {/* One flex item, so it wraps as a unit: beside the controls on a wide window, onto its own
             row (the result line after it) when they do not fit. */}

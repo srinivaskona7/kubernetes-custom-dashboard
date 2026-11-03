@@ -45,7 +45,7 @@ export const COLUMN_INFO = {
   allocatable:
     'CPU and memory the kubelet reports as available to pods on this node — capacity minus what is reserved for the system and the kubelet. It is what the scheduler may fill, not what is filled.',
   podSlots:
-    'Pods scheduled on this node against the node’s own pod capacity (110 by default on Gardener). A node can hit this ceiling with CPU and memory to spare.',
+    'Pods scheduled on this node against the node’s own pod capacity (110 by default on most distributions). A node can hit this ceiling with CPU and memory to spare.',
   qos: 'The QoS class the kubelet assigned from the pod’s own requests and limits: Guaranteed when every container sets both equal, Burstable when requests are set, BestEffort when neither is. It decides eviction order under node pressure.',
   /* Top Consumers' Share column: the denominator is every sampled pod, so a pod without a sample
      is outside it rather than a zero inside it. */
@@ -84,7 +84,7 @@ export const COLUMN_INFO = {
      denominator is, because "4xx share" from a bounded sample is not an error rate for the cluster and
      an operator who reads it as one will escalate the wrong thing. */
   ingressServedBy:
-    'The VirtualService or Kyma APIRule that declares this host, matched on the host the object itself lists. Empty means nothing in the cluster publishes it — whatever answered did so through a Gateway with no route behind it.',
+    'The VirtualService, Ingress or HTTPRoute that declares this host, matched on the host the object itself lists. Empty means nothing in the cluster publishes it — whatever answered did so through a Gateway with no route behind it.',
   ingressErrorShare:
     'Non-2xx and unanswered records over this host’s own records in the window that was read. A share of the sample, deliberately not called a rate — a tail of N lines has no denominator for the cluster’s traffic.',
   ingressUpstreamLatency:
@@ -162,10 +162,7 @@ export const COLUMN_INFO = {
   podMemory:
     'Read as Used / Request / Limit, as for CPU. Memory at 80% of its limit is flagged because the next event is an OOMKill.',
   namespaceLastUpdated:
-    'The newest workload creation or rollout restart in this namespace. A dash when the namespace holds no workload.',
-
-  policySource:
-    'Where this ConstraintTemplate came from, judged against a pinned copy of the upstream gatekeeper-library catalogue by name and by its Rego, line for line. “modified” is a library name whose Rego differs, so the upstream description does not necessarily apply; “custom” is not a library template. The catalogue is the version this console was built with, so a library release after that is not known here.'
+    'The newest workload creation or rollout restart in this namespace. A dash when the namespace holds no workload.'
 } as const;
 
 export type ColumnInfoKey = keyof typeof COLUMN_INFO;

@@ -1,7 +1,7 @@
 /**
  * The filter controls every dense table on this console shares.
  *
- * Extracted from the OPA screens, where they were written, once a second family of tables (Top
+ * Extracted from the first screens that wrote them once a second family of tables (Top
  * Utilization) needed the same three: a labelled select whose options are always the real values
  * present in the data, a debounced search box, and the bar that holds them with a reset that only
  * appears when it would do something.

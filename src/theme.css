@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 /**
- * Design tokens, verbatim from the Kyma Fleet Console design system.
+ * Design tokens, verbatim from the Kubernetes Fleet Dashboard design system.
  *
  * The one rule that governs every colour decision below: violet is the brand and never a
  * status. Accent marks navigation, selection, focus and primary actions; status has its
@@ -67,7 +67,7 @@
   --graph-label: #8b93a1;
   --graph-text: #e8eaed;
 
-  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-display: 'Space Grotesk', 'Inter', sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
 
@@ -668,7 +668,7 @@ html.dark {
    *
    * It used to be on every `tbody tr`, which was true while the only tables in the console were
    * `DataTable`s with an `onSelect`. It stopped being true the moment thirty-one hand-rolled tables
-   * were folded into this class: a read-only APIRule row that shows a pointer promises a click that
+   * were folded into this class: a read-only Ingress row that shows a pointer promises a click that
    * does nothing. `DataTable` already sets `role="button"` exactly when `onSelect` is passed, which
    * makes the affordance and the behaviour the same fact.
    */
@@ -1053,9 +1053,9 @@ html.dark {
   }
   /*
    * Directly under a FilterBar or a Section heading, the toolbar row pulls up into the margin above
-   * it and drops to 18px. Stacked, the two made a dead band: measured on OPA Native policies, the
+   * it and drops to 18px. Stacked, the two made a dead band: measured on a filtered policy table, the
    * FilterBar's divider sat 40px above the header (12px margin + 28px of reserved toolbar), and 36px
-   * under the "highest risk first" hint on OPA Overview. The negative top margin collapses with the
+   * under the "highest risk first" hint on an overview table. The negative top margin collapses with the
    * one above — through `.table-block`, which has no padding or border — leaving 2px under a divider
    * and none under a heading, so the header lands 20px and 18px below. Everywhere else the toolbar
    * keeps its full row.
@@ -1083,8 +1083,8 @@ html.dark {
    * First table in a card body: the body gives up its top padding and the toolbar drops to 18px, so
    * the header lands 18px under the card title — the same as the IngressCard rule above. Measured
    * 2026-09-27: the body's 24px padding plus the hidden 22px toolbar row left a 52px blank band under
-   * the title on Clusters, Nodes, All Workloads, Helm Releases, Node spend, Authorization Posture and
-   * Kyma Modules, and 18px
+   * the title on Clusters, Nodes, All Workloads, Helm Releases, Node spend and Authorization Posture,
+   * and 18px
    * on every Traffic panel. Only a body whose first table has a toolbar gives up its padding: a
    * table without one fell flush against the title (Sidecar Coverage, APIService Availability,
    * Prometheus-Operator, 24px → 0). IngressCard bodies are left to the rule above, whose -6px pull
@@ -1672,10 +1672,10 @@ html.dark {
    *
    *   .tbl        900 / 660   — the six-to-eight column tables (Overview, Tokens, Helm)
    *   .tbl-mid   1000 / 700   — nine columns (Workloads, pod inventory)
-   *   .tbl-wide  1300 / 1000  — ten-plus columns (Helm releases, OPA webhooks, Traffic)
+   *   .tbl-wide  1300 / 1000  — ten-plus columns (Helm releases, webhooks, Traffic)
    *   .tbl-xwide 1440 / 1120  — ten-to-twelve numeric columns, wrapped headers (Top Utilization,
    *                             Nodes)
-   *   .tbl-lean  1440 / 1040  — eleven columns whose pinned set is narrow (OPA policies)
+   *   .tbl-lean  1440 / 1040  — eleven columns whose pinned set is narrow (policy tables)
    *
    * The base pair is 900/660 and must stay there. Raising it to 1000/700 for everyone — which
    * is what shipped in the first pass — hid columns that measurably fit: at a 1280px viewport
@@ -1784,7 +1784,7 @@ html.dark {
   /*
    * The lean tier: xwide's first threshold, a far lower second one.
    *
-   * OPA Policy Governance is eleven columns that need 1628px, so like Top Utilization it has to
+   * A policy-governance table of eleven columns that need 1628px, so like Top Utilization it has to
    * start shedding above 1440 — at a 1728px viewport its container is 1405px and `tbl-wide`'s
    * 1300px threshold never fired, which clipped 223px. But its priority-1 set is only 563px wide
    * (Policy, Enforcement, Status, Violations), so xwide's 1120px prio-2 threshold threw away
@@ -1819,7 +1819,7 @@ html.dark {
    * The nested micro-table: a few rows of detail inside a drawer, a card or an expanded row.
    *
    * Three of these existed as hand-rolled markup (the container breakdown in the pod drawer, a
-   * LimitRange's defaults, the OPA per-policy bars) and each had invented its own type size and row
+   * LimitRange's defaults, the per-policy bars) and each had invented its own type size and row
    * height. They are genuinely not `.tbl` tables — a 44px row and a 36px uppercase header inside a
    * 380px drawer is most of the drawer — so they get a variant rather than a conversion: same 12px
    * inter-column padding, same flush outer edge, same right-aligned numerics, at two thirds the

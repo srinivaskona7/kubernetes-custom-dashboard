@@ -165,11 +165,11 @@ test('the token record matches what the token store expects, with renewedAt unse
 test('the Secret patch is a merge touching one key, so other clusters survive', () => {
   const argv = patchArgs({
     hub: 'appkymadv', namespace: 'btp-platform-foundation',
-    secret: 'kyma-fleet-tokens', key: 'platformsbx', value: { token: 'a.b.c' },
+    secret: 'fleet-dashboard-tokens', key: 'platformsbx', value: { token: 'a.b.c' },
   });
   assert.deepStrictEqual(argv.slice(0, 8), [
     '--context', 'appkymadv', '-n', 'btp-platform-foundation',
-    'patch', 'secret', 'kyma-fleet-tokens', '--type',
+    'patch', 'secret', 'fleet-dashboard-tokens', '--type',
   ]);
   assert.strictEqual(argv[8], 'merge');
 
@@ -186,7 +186,7 @@ test('both Secrets are patched, clusters before tokens', () => {
   onboard({ ...BASE, runFn });
 
   const patched = runFn.calls.filter(a => a.includes('patch')).map(a => a[a.indexOf('secret') + 1]);
-  assert.deepStrictEqual(patched, ['kyma-fleet-clusters', 'kyma-fleet-tokens']);
+  assert.deepStrictEqual(patched, ['fleet-dashboard-clusters', 'fleet-dashboard-tokens']);
 });
 
 test('--dry-run changes nothing on either cluster', () => {
@@ -227,7 +227,7 @@ test('--prefix renames the RBAC objects and applies a generated bundle over stdi
   assert.deepStrictEqual(apply.argv.slice(-2), ['-f', '-'], 'a renamed bundle must come over stdin');
   assert.ok(apply.input.includes('name: acme-fleet-reader'), 'ClusterRole not renamed');
   assert.ok(apply.input.includes('name: acme-fleet-token-issuer'), 'self-mint Role not renamed');
-  assert.ok(!apply.input.includes('kyma-fleet-reader'), 'a default name survived the rename');
+  assert.ok(!apply.input.includes('fleet-dashboard-reader'), 'a default name survived the rename');
 });
 
 test('--namespace and --sa reach the mint, the self-mint check and the stored record', () => {

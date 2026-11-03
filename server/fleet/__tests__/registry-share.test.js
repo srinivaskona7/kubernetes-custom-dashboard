@@ -44,15 +44,18 @@ test('maxAgeMs 0 always builds; a failed build is not kept', async () => {
 test('readRegistry: names, routes with backends and Gateway hosts from one set of reads; a refusal stays unavailable', async () => {
   const listFn = async ({ path }) => {
     // k8s.list resolves to the items array.
-    if (path.includes('/gateways')) return [{ metadata: { namespace: 'kyma-system', name: 'kyma-gateway' }, spec: { servers: [{ hosts: ['*.c.example.com'] }] } }];
+    if (path.includes('/gateways')) return [{ metadata: { namespace: 'istio-system', name: 'public-gateway' }, spec: { servers: [{ hosts: ['*.c.example.com'] }] } }];
     if (path.includes('/virtualservices')) return [{ metadata: { namespace: 'shop', name: 'vs' }, spec: { hosts: ['shop.c.example.com'], http: [{ route: [{ destination: { host: 'srv' } }] }] } }];
     if (path.includes('/networkpolicies')) return [{ metadata: { namespace: 'shop', name: 'p' }, spec: { egress: [{ to: [{ ipBlock: { cidr: '52.1.2.3/32' } }] }] } }];
-    if (path.includes('/apirules')) { const e = new Error('forbidden'); e.status = 403; throw e; }
+    if (path.includes('/httproutes')) { const e = new Error('forbidden'); e.status = 403; throw e; }
     return [];
   };
   const reg = await traffic.readRegistry({ listFn, baseCtx: ctx('c1', 't') });
   assert.equal(reg.names.byIp.get('52.1.2.3')[0].policyName, 'p');
   assert.deepEqual(reg.routes.map(r => [r.host, r.backends]), [['shop.c.example.com', [{ name: 'srv', namespace: 'shop' }]]]);
   assert.deepEqual(reg.gatewayHosts.map(g => g.host), ['*.c.example.com']);
-  assert.equal(reg.reads.apirules.unavailable, true);
+  assert.equal(reg.reads.httproutes.unavailable, true);
+  assert.equal(reg.reads.ingresses.unavailable, false);
+  assert.equal('apirules' in reg.reads, false);
+  assert.equal(reg.reads.nameReads.length, 1, 'NetworkPolicies are the only naming read');
 });

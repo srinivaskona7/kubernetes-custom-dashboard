@@ -9,7 +9,7 @@ const FAKE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '
 /**
  * The ingress screens' UI invariants, enforced as source checks rather than as prose.
  *
- * Modelled on `opa-ui-readonly.test.js`, for the same reason: `app/fleet-ui` runs vitest in Node with
+ * Source checks for the same reason as `helm-ui-readonly.test.ts`: `app/fleet-ui` runs vitest in Node with
  * no DOM (jsdom is blocked by npm E401 against the internal registry), so a rendering test cannot run
  * here — but the invariants that matter most about these five screens are all checkable in the source.
  *
@@ -76,7 +76,8 @@ const FORBIDDEN_LABELS = [
   'Apply', 'Sync', 'Enable', 'Disable', 'Rotate',
   'Create Gateway', 'Edit Gateway', 'Delete Gateway',
   'Create VirtualService', 'Edit VirtualService', 'Delete VirtualService',
-  'Create APIRule', 'Edit APIRule', 'Delete APIRule',
+  'Create Ingress', 'Edit Ingress', 'Delete Ingress',
+  'Create HTTPRoute', 'Edit HTTPRoute', 'Delete HTTPRoute',
   'Block', 'Ban', 'Allowlist', 'Denylist', 'Rate limit',
   'Uninstall', 'Install ', 'Modify', 'Mutate'
 ];

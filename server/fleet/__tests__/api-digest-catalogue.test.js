@@ -415,7 +415,7 @@ function saJwt() {
   const now = Math.floor(Date.now() / 1000);
   return [
     part({ alg: 'none', typ: 'JWT' }),
-    part({ sub: 'system:serviceaccount:kyma-fleet:fleet-reader', iat: now, exp: now + 3600 }),
+    part({ sub: 'system:serviceaccount:fleet-dashboard:fleet-reader', iat: now, exp: now + 3600 }),
     'not-a-real-signature'
   ].join('.');
 }
@@ -479,7 +479,7 @@ async function apiServer(t) {
     req.resume();
     req.on('end', () => {
       const minting = req.method === 'POST' &&
-        req.url.split('?')[0] === '/api/v1/namespaces/kyma-fleet/serviceaccounts/fleet-reader/token';
+        req.url.split('?')[0] === '/api/v1/namespaces/fleet-dashboard/serviceaccounts/fleet-reader/token';
       const expirationTimestamp = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       res.writeHead(minting ? 201 : 404, { 'content-type': 'application/json' });
       res.end(JSON.stringify(minting ? { kind: 'TokenRequest', status: { token: 'not-a-real-token', expirationTimestamp } } : { kind: 'Status', code: 404 }));

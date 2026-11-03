@@ -4,7 +4,7 @@ import type { Tone } from '../../components/ui';
 import { decidedByText } from './ingress/refused-view';
 
 /**
- * The one tooltip for every external/BTP TCP timing shown as "Connection duration" or an
+ * The one tooltip for every external TCP timing shown as "Connection duration" or an
  * open-for time: it is a connection's lifetime, never an HTTP/application latency. One constant,
  * imported at each use site, so the wording can never drift between them.
  */

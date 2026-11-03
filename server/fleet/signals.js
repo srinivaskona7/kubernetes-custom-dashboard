@@ -34,7 +34,7 @@
  * A finding is emitted **only** for a finite number greater than zero. `null` and `undefined`
  * produce no finding at all, because that is what a collector returns when the read behind the
  * number failed — several deliberately return `null` rather than `0` for exactly this reason
- * (`certificates.summary.totalCertificates`, every count in `platform.js`). Turning that into a
+ * (`certificates.summary.totalCertificates`). Turning that into a
  * finding of `0` would reintroduce the confident-zero bug at the one layer whose whole job is to
  * decide what the operator is told. The honesty about *that* gap travels on `unavailable`.
  *
@@ -203,15 +203,11 @@ const RULES = {
 
   workloads: d => [f((d.summary || {}).notReady, ['workload not ready', 'workloads not ready'], BAD)],
 
-  // The migration count is BAD rather than WARN on purpose: v1beta1 APIRules stopped being
-  // reconciled in Sep 2026, so an unmigrated rule is not a deprecation notice — the routing it
-  // describes is no longer being applied.
+  // A Gateway its controller has not programmed serves nothing, whatever routes point at it.
+  // `null` (no verdict yet) is not counted: an unreconciled object is not a failed one.
   networking: d => [
-    f(
-      (d.summary || {}).apirulesNeedingMigration,
-      ['APIRule still v1beta1 (no longer reconciled)', 'APIRules still v1beta1 (no longer reconciled)'],
-      BAD
-    )
+    f(count(d.gateways, g => g.programmed === false), ['Gateway not programmed', 'Gateways not programmed'], BAD),
+    f(count(d.httproutes, r => r.accepted === false), ['HTTPRoute not accepted by its Gateway', 'HTTPRoutes not accepted by their Gateway'], WARN)
   ],
 
   storage: d => {
@@ -309,44 +305,6 @@ const RULES = {
     ];
   },
 
-  modules: d => {
-    const mods = Array.isArray(d.kymas) ? d.kymas.flatMap(k => (Array.isArray(k.modules) ? k.modules : [])) : null;
-    return [
-      f(count(d.kymas, k => k.state && k.state !== 'Ready'), ['Kyma CR not Ready', 'Kyma CRs not Ready'], BAD),
-      f(count(mods, m => m.state === 'Error'), ['module in Error', 'modules in Error'], BAD),
-      f(count(mods, m => m.state && m.state !== 'Ready' && m.state !== 'Error'), ['module not settled', 'modules not settled'], WARN),
-      f(count(mods, m => m.currency === 'behind'), ['module behind its channel', 'modules behind their channel'], WARN)
-    ];
-  },
-
-  // The no-binding count is a join of both lists. A refused one arrives as [] (see `refused`), so
-  // every instance would join to nothing and read as unbound: a warning about a read that failed.
-  btpServices: d => {
-    const s = d.summary || {};
-    return [
-      f(count(d.instances, i => i.ready === false), ['service instance not ready', 'service instances not ready'], BAD),
-      f(count(d.bindings, b => b.ready === false), ['service binding not ready', 'service bindings not ready'], BAD),
-      f(
-        unless(d, ['serviceinstances', 'servicebindings'], s.instancesWithNoBindingInThisClusterCount),
-        ['instance with no binding here', 'instances with no binding here'],
-        WARN
-      )
-    ];
-  },
-
-  policy: d => {
-    const s = d.summary || {};
-    return [
-      // failurePolicy: Fail plus no ready endpoint = every matching API write fails cluster-wide.
-      f(
-        s.activeOutageRiskCount,
-        ['fail-closed webhook with no ready endpoint', 'fail-closed webhooks with no ready endpoint'],
-        BAD
-      ),
-      f(s.pdbDrainBlockerCount, ['PDB blocking a drain', 'PDBs blocking a drain'], WARN)
-    ];
-  },
-
   // Pod-level pressure is `health`'s; this is about limits and measurability.
   capacity: d => {
     const u = d.unboundedContainers || {};
@@ -381,17 +339,6 @@ const RULES = {
     ];
   },
 
-  integrity: d => {
-    const s = d.summary || {};
-    return [
-      f(s.unavailableAggregated, ['aggregated APIService unavailable', 'aggregated APIServices unavailable'], BAD),
-      f(
-        s.servedVersionDrift,
-        ['CRD serving a version the cluster no longer prefers', 'CRDs serving a version the cluster no longer prefers'],
-        WARN
-      )
-    ];
-  }
 };
 
 /**
@@ -587,30 +534,20 @@ const STATS = {
 
   networking: d => {
     const s = d.summary || {};
-    // `apirulesCount` is 0 when the APIRule list was refused; `apirulesUnavailable` says so.
-    const readable = s.apirulesUnavailable == null;
-    const v = s.apirulesByVersion || {};
-    const rules = readable ? num(s.apirulesCount) : null;
-    const known = [v.v2, v.v2alpha1, v.v1beta1].map(n => num(n) ?? 0);
     return {
       headline: [
-        h(rules, ['APIRule', 'APIRules']),
+        h(unless(d, ['ingresses'], s.ingressesCount), ['Ingress', 'Ingresses']),
+        h(unless(d, ['httproutes'], s.httproutesCount), ['HTTPRoute', 'HTTPRoutes']),
+        h(unless(d, ['gateways'], s.gatewaysCount), ['Gateway', 'Gateways']),
         h(unless(d, ['virtualservices'], s.virtualServicesCount), ['VirtualService', 'VirtualServices']),
-        h(unless(d, ['services'], s.servicesCount), ['Service', 'Services']),
-        h(unless(d, ['ingresses'], s.ingressesCount), ['Ingress', 'Ingresses'])
+        h(unless(d, ['services'], s.servicesCount), ['Service', 'Services'])
       ],
-      split: readable ? split(rules, [
-        ['v2', 'v2', known[0], 'ok'],
-        ['v2alpha1', 'v2alpha1', known[1], 'neutral'],
-        ['v1beta1', 'v1beta1', known[2], 'warn'],
-        // Whatever the three named versions do not account for, so the parts always sum.
-        ['unknown', 'unknown version', Math.max(0, gap(rules, known.reduce((a, b) => a + b, 0)) ?? 0), 'unknown']
-      ]) : null
+      split: null
     };
   },
 
   certificates: d => {
-    // Both providers report under one label, so one refused provider makes every count partial.
+    // A refused certificate list makes every count below a zero by construction.
     if (refused(d, 'certificates')) {
       return { headline: [h(null, 'certificates'), h(null, 'expiring soon'), h(null, 'expired')], split: null };
     }
@@ -629,24 +566,6 @@ const STATS = {
         ['expiring', 'expiring soon', by.expiring, 'warn'],
         ['unready', 'not ready', by.unready, 'warn'],
         ['expired', 'expired', by.expired, 'bad']
-      ]) : null
-    };
-  },
-
-  modules: d => {
-    const s = d.summary || {};
-    // Only a confirmed Kyma cluster has module counts to show: `false` is "not installed" (the
-    // tile already says so), `null` is a refused or unresolved kymas read, where 0 would be a guess.
-    if (s.kymaManaged !== true) return null;
-    const mods = Array.isArray(d.kymas) ? d.kymas.flatMap(k => (Array.isArray(k.modules) ? k.modules : [])) : null;
-    const by = { ready: 0, unsettled: 0, error: 0 };
-    for (const m of mods || []) by[m.state === 'Ready' ? 'ready' : m.state === 'Error' ? 'error' : 'unsettled']++;
-    return {
-      headline: [h(s.moduleCount ?? (mods && mods.length), ['module', 'modules']), h(s.kymaCount, ['Kyma CR', 'Kyma CRs'])],
-      split: mods ? split(mods.length, [
-        ['ready', 'Ready', by.ready, 'ok'],
-        ['unsettled', 'not settled', by.unsettled, 'warn'],
-        ['error', 'Error', by.error, 'bad']
       ]) : null
     };
   }

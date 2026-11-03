@@ -90,9 +90,7 @@ const PRE_STANDARD = new Set([
   // A field on the utilization model, computed alongside the rest of that payload.
   'pages/cluster-tabs/usage/utilization-model.ts',
   // Single-select namespace picker driving the pod-log selection, not a row filter.
-  'pages/cluster-tabs/LogsTab.tsx',
-  // Single-select, and it buckets a null namespace to '-' rather than dropping it.
-  'pages/cluster-tabs/opa/OpaViolations.tsx'
+  'pages/cluster-tabs/LogsTab.tsx'
 ]);
 
 test('a new namespace option list uses namespacesOf rather than deriving its own', () => {

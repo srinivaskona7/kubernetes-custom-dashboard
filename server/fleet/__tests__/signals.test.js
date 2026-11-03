@@ -2,7 +2,7 @@
  * The Overview's health signals.
  *
  * The first two tests here are the ones that matter, and they exist because the bug they catch
- * shipped: `/clusters/:id/summary` reported `state: 'ok'` for all seventeen groups on a cluster
+ * shipped: `/clusters/:id/summary` reported `state: 'ok'` for every group on a cluster
  * with two crashlooping containers, because `groupState` only ever asks "did the read succeed".
  * A test that only checked the response shape passed happily through that, so these check the
  * answer instead.
@@ -32,10 +32,9 @@ const FAT_PAYLOAD = {
     minReplicas: 1, maxReplicas: 2, currentReplicas: 2,
     conditions: [{ type: 'ScalingActive', status: 'True' }, { type: 'ScalingLimited', status: 'True', reason: 'TooManyReplicas' }]
   }],
-  instances: [{ ready: false }],
-  bindings: [{ ready: false }],
   mtls: [{ mode: 'PERMISSIVE' }],
-  kymas: [{ state: 'Processing', modules: [{ state: 'Error' }, { state: 'Processing' }, { state: 'Ready', currency: 'behind' }] }],
+  gateways: [{ programmed: false }, { programmed: null }],
+  httproutes: [{ accepted: false }, { accepted: true }],
   ingressBindingIntegrity: {
     virtualServicesWithMissingGateway: [{}],
     duplicateHostExposures: [{}],
@@ -51,26 +50,22 @@ const FAT_PAYLOAD = {
     crashLoops: 1, underCapacity: 1, zeroEndpointServices: 1,
     daemonSetsStuck: 1, driftedDeployments: 1, staleStatefulSets: 1,
     notReady: 1,
-    apirulesNeedingMigration: 1,
     pendingPvcs: 1, defaultStorageClassState: { state: 'missing' }, quotaCoverage: 0.5,
     privilegedContainers: 1, appNamespacesAudited: 2, networkPolicyProtectedNamespaces: 1,
     withFindings: 1, withWarnings: 1,
     expired: 1, expiringSoon: 1, unready: 1,
-    isMultiZone: false,
-    instancesWithNoBindingInThisClusterCount: 1,
-    activeOutageRiskCount: 1, pdbDrainBlockerCount: 1,
-    unavailableAggregated: 1, servedVersionDrift: 1
+    isMultiZone: false
   }
 };
 
 // The group list comes from the live route rather than from a copy of it here: a second hand-kept
-// list of the seventeen keys is exactly the kind of duplicate that goes stale silently, and the
+// list of the group keys is exactly the kind of duplicate that goes stale silently, and the
 // route's own answer is the thing this gate is about.
 test('every summary group has a health rule — a group without one renders a green pill backed by no check', async () => {
   await withRouter({}, async ({ get, registry }) => {
     const { body } = await get(`/clusters/${registry.active()[0].id}/summary`);
     const keys = Object.keys(body.groups || {});
-    assert.ok(keys.length >= 17, `only ${keys.length} groups came back; this gate would pass vacuously`);
+    assert.ok(keys.length >= 13, `only ${keys.length} groups came back; this gate would pass vacuously`);
 
     const missing = keys.filter(k => !SIGNAL_GROUP_KEYS.includes(k));
     assert.deepStrictEqual(
@@ -143,7 +138,7 @@ test('the internal bookkeeping fields never reach the wire', async () => {
     }
   }
   // Without this the loop above could pass by finding nothing at all.
-  assert.ok(groupsWithFindings >= 15, `only ${groupsWithFindings} groups produced a finding; this gate would pass vacuously`);
+  assert.ok(groupsWithFindings >= 12, `only ${groupsWithFindings} groups produced a finding; this gate would pass vacuously`);
 
   await withRouter({}, async ({ get, registry }) => {
     for (const path of [`/clusters/${registry.active()[0].id}/summary`, '/summary']) {
@@ -224,28 +219,23 @@ test('a real zero produces no finding, so a clean topic stays silent', () => {
 });
 
 test('a null count is unread, not zero — the collectors that use null for "the read failed" stay silent', () => {
-  // `platform.js` returns null for every count when the APIService read failed; a finding of 0
-  // there would be the confident-zero bug moved one layer up.
-  const results = [ok('c1', { summary: { totalApiServices: null, unavailableAggregated: null, servedVersionDrift: null } })];
-  assert.deepStrictEqual(signalsOf('integrity', results), []);
+  // `certificates.summary.totalCertificates` is null when no certificate source could be read; a
+  // finding of 0 there would be the confident-zero bug moved one layer up.
+  const results = [ok('c1', { summary: { totalCertificates: null, expired: null, expiringSoon: null, unready: null } })];
+  assert.deepStrictEqual(signalsOf('certificates', results), []);
 });
 
-test('a no-binding count built over a refused list stays silent — every instance joins to nothing and reads as unbound', () => {
-  // The shape the live rail warned on: three instances, the bindings list refused and so empty,
-  // and all three counted as having no binding here.
-  const joined = { instanceCount: 3, bindingCount: 0, instancesWithNoBindingInThisClusterCount: 3 };
-  for (const list of ['servicebindings', 'serviceinstances']) {
-    assert.deepStrictEqual(
-      signalsOf('btpServices', [ok('c1', { instances: [], bindings: [], summary: { ...joined, unavailable: [list] } })]),
-      [],
-      `a refused ${list} read still produced a finding`
-    );
-  }
-  // Read in full, the same count is a real finding: the gate is the refusal, not the number.
-  assert.deepStrictEqual(
-    signalsOf('btpServices', [ok('c1', { instances: [], bindings: [], summary: { ...joined, unavailable: [] } })]),
-    [{ label: 'instances with no binding here', count: 3, tone: 'warn', clusters: ['c1'] }]
-  );
+test('networking: an unprogrammed Gateway is bad, an unaccepted HTTPRoute a warning, and no verdict is silent', () => {
+  const results = [ok('c1', {
+    gateways: [{ programmed: false }, { programmed: true }, { programmed: null }],
+    httproutes: [{ accepted: false }, { accepted: false }, { accepted: null }]
+  })];
+  assert.deepStrictEqual(signalsOf('networking', results), [
+    { label: 'Gateway not programmed', count: 1, tone: 'bad', clusters: ['c1'] },
+    { label: 'HTTPRoutes not accepted by their Gateway', count: 2, tone: 'warn', clusters: ['c1'] }
+  ]);
+  // A cluster with neither API installed has nothing to say.
+  assert.deepStrictEqual(signalsOf('networking', [ok('c1', { gateways: [], httproutes: [] })]), []);
 });
 
 test("reliability stays silent when its own verdict says the pod sweep failed, rather than reading its empty arrays as a clean cluster", () => {
@@ -292,7 +282,7 @@ test('GET /clusters/:id/summary carries health and signals on every group, not j
     const { status, body } = await get(`/clusters/${id}/summary`);
     assert.equal(status, 200);
     const groups = Object.entries(body.groups);
-    assert.ok(groups.length >= 17, `only ${groups.length} groups came back`);
+    assert.ok(groups.length >= 13, `only ${groups.length} groups came back`);
     for (const [key, g] of groups) {
       assert.ok(['unknown', 'attention', 'warn', 'partial', 'clear'].includes(g.health), `${key}.health was ${g.health}`);
       assert.ok(Array.isArray(g.signals), `${key}.signals was not an array`);
@@ -310,7 +300,7 @@ test('GET /summary breaks down per cluster, so the rail dots need no request per
     assert.deepStrictEqual(Object.keys(body.perCluster).sort(), [...ids].sort());
     for (const id of ids) {
       const g = body.perCluster[id];
-      assert.ok(Object.keys(g).length >= 17, `${id} got ${Object.keys(g).length} groups`);
+      assert.ok(Object.keys(g).length >= 13, `${id} got ${Object.keys(g).length} groups`);
       for (const [key, one] of Object.entries(g)) {
         assert.ok(one.health, `${id}.${key} had no health`);
         assert.ok(Array.isArray(one.signals), `${id}.${key}.signals was not an array`);

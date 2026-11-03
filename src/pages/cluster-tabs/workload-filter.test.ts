@@ -32,17 +32,17 @@ const workload = (kind: string, name: string, namespace: string, pods: Pod[]): W
 
 /**
  * One cluster, shaped like the live one the filter has to survive: two namespaces an operator cares
- * about, a system namespace, and a pod in `kyma-system` claimed by two overlapping selectors —
+ * about, a system namespace, and a pod in `platform-system` claimed by two overlapping selectors —
  * the case that makes the naive pod count exceed the rows the table can draw.
  */
-const shared = pod('ctrl-1', 'kyma-system');
+const shared = pod('ctrl-1', 'platform-system');
 const items: WorkloadRow[] = [
-  workload('Deployment', 'care-api', 'applecare', [pod('care-api-1', 'applecare'), pod('care-api-2', 'applecare')]),
-  workload('StatefulSet', 'redis', 'applecare', [pod('redis-0', 'applecare')]),
+  workload('Deployment', 'care-api', 'acme-shop', [pod('care-api-1', 'acme-shop'), pod('care-api-2', 'acme-shop')]),
+  workload('StatefulSet', 'redis', 'acme-shop', [pod('redis-0', 'acme-shop')]),
   workload('Deployment', 'istiod', 'istio-system', [pod('istiod-1', 'istio-system')]),
-  workload('DaemonSet', 'fluent-bit', 'kyma-system', [pod('fluent-bit-1', 'kyma-system')]),
-  workload('Deployment', 'ctrl-blue', 'kyma-system', [shared]),
-  workload('Deployment', 'ctrl-green', 'kyma-system', [shared])
+  workload('DaemonSet', 'fluent-bit', 'platform-system', [pod('fluent-bit-1', 'platform-system')]),
+  workload('Deployment', 'ctrl-blue', 'platform-system', [shared]),
+  workload('Deployment', 'ctrl-green', 'platform-system', [shared])
 ];
 
 const ids = (rows: readonly { kind?: string; name: string; namespace?: string | null }[]): string[] =>
@@ -56,7 +56,7 @@ const state = (over: Partial<WorkloadFilterState> = {}): WorkloadFilterState => 
 
 describe('namespaceOptions', () => {
   it('derives the options from the rows on screen, never from a fixed list', () => {
-    expect(namespaceOptions(items)).toEqual(['applecare', 'istio-system', 'kyma-system']);
+    expect(namespaceOptions(items)).toEqual(['acme-shop', 'istio-system', 'platform-system']);
   });
 
   it('offers the same options for the pod rows, because a pod lives in its workload’s namespace', () => {
@@ -75,17 +75,17 @@ describe('filterByNamespace', () => {
   });
 
   it('two namespaces are OR, not AND (requirement 9)', () => {
-    const both = filterByNamespace(items, new Set(['applecare', 'istio-system']));
+    const both = filterByNamespace(items, new Set(['acme-shop', 'istio-system']));
     expect(ids(both)).toEqual([
-      'applecare/Deployment/care-api',
-      'applecare/StatefulSet/redis',
+      'acme-shop/Deployment/care-api',
+      'acme-shop/StatefulSet/redis',
       'istio-system/Deployment/istiod'
     ]);
   });
 
   it('adding a namespace never removes a row the single selection kept', () => {
-    const one = ids(filterByNamespace(items, new Set(['applecare'])));
-    const two = ids(filterByNamespace(items, new Set(['applecare', 'kyma-system'])));
+    const one = ids(filterByNamespace(items, new Set(['acme-shop'])));
+    const two = ids(filterByNamespace(items, new Set(['acme-shop', 'platform-system'])));
     for (const row of one) expect(two).toContain(row);
     expect(two.length).toBeGreaterThan(one.length);
   });
@@ -93,18 +93,18 @@ describe('filterByNamespace', () => {
   it('keeps a cluster-scoped row under any selection — no namespace can exclude it', () => {
     const mixed = [
       { kind: 'ClusterRole', name: 'fleet-reader', namespace: null },
-      { kind: 'Deployment', name: 'care-api', namespace: 'applecare' },
+      { kind: 'Deployment', name: 'care-api', namespace: 'acme-shop' },
       { kind: 'Deployment', name: 'istiod', namespace: 'istio-system' }
     ];
-    expect(ids(filterByNamespace(mixed, new Set(['applecare'])))).toEqual([
+    expect(ids(filterByNamespace(mixed, new Set(['acme-shop'])))).toEqual([
       '-/ClusterRole/fleet-reader',
-      'applecare/Deployment/care-api'
+      'acme-shop/Deployment/care-api'
     ]);
   });
 
   it('does not mutate the list it was given', () => {
     const before = ids(items);
-    filterByNamespace(items, new Set(['applecare']));
+    filterByNamespace(items, new Set(['acme-shop']));
     expect(ids(items)).toEqual(before);
   });
 });
@@ -124,13 +124,13 @@ describe('matchesKind', () => {
 });
 
 describe('filterWorkloads', () => {
-  it('Deployments + Namespace=applecare shows only Deployment resources in the applecare namespace', () => {
-    const rows = filterWorkloads(items, state({ kind: 'Deployment', namespaces: new Set(['applecare']) }));
-    expect(ids(rows)).toEqual(['applecare/Deployment/care-api']);
+  it('Deployments + Namespace=acme-shop shows only Deployment resources in the acme-shop namespace', () => {
+    const rows = filterWorkloads(items, state({ kind: 'Deployment', namespaces: new Set(['acme-shop']) }));
+    expect(ids(rows)).toEqual(['acme-shop/Deployment/care-api']);
   });
 
   it('composes in either order with the same result (requirement 7)', () => {
-    const f = state({ kind: 'Deployment', namespaces: new Set(['applecare', 'kyma-system']) });
+    const f = state({ kind: 'Deployment', namespaces: new Set(['acme-shop', 'platform-system']) });
     const kindThenNamespace = filterByNamespace(items.filter(w => matchesKind(w.kind, f.kind)), f.namespaces);
     const namespaceThenKind = filterByNamespace(items, f.namespaces).filter(w => matchesKind(w.kind, f.kind));
     expect(ids(kindThenNamespace)).toEqual(ids(namespaceThenKind));
@@ -138,17 +138,17 @@ describe('filterWorkloads', () => {
   });
 
   it('a kind with no rows in the selected namespaces yields an empty list, not every row', () => {
-    expect(filterWorkloads(items, state({ kind: 'DaemonSet', namespaces: new Set(['applecare']) }))).toEqual([]);
+    expect(filterWorkloads(items, state({ kind: 'DaemonSet', namespaces: new Set(['acme-shop']) }))).toEqual([]);
   });
 
   it('a selection naming a namespace that no longer appears does not empty the table', () => {
     // The stale case: a namespace was selected, then the cluster changed under it. `pruneNamespaces`
     // is what the consumer must run first; without it every row fails the selection at once.
-    const stale = new Set(['applecare', 'deleted-ns']);
+    const stale = new Set(['acme-shop', 'deleted-ns']);
     const pruned = pruneNamespaces(stale, namespaceOptions(items));
     expect(ids(filterWorkloads(items, state({ namespaces: pruned })))).toEqual([
-      'applecare/Deployment/care-api',
-      'applecare/StatefulSet/redis'
+      'acme-shop/Deployment/care-api',
+      'acme-shop/StatefulSet/redis'
     ]);
     // And a selection that prunes to nothing is "all" again, never "nothing".
     const gone = pruneNamespaces(new Set(['deleted-ns']), namespaceOptions(items));
@@ -158,15 +158,15 @@ describe('filterWorkloads', () => {
 
 describe('podInventoryRows', () => {
   it('filters the flat inventory by the pod’s own namespace', () => {
-    expect(ids(podInventoryRows(items, new Set(['applecare'])))).toEqual([
-      'applecare/Pod/care-api-1',
-      'applecare/Pod/care-api-2',
-      'applecare/Pod/redis-0'
+    expect(ids(podInventoryRows(items, new Set(['acme-shop'])))).toEqual([
+      'acme-shop/Pod/care-api-1',
+      'acme-shop/Pod/care-api-2',
+      'acme-shop/Pod/redis-0'
     ]);
   });
 
   it('keeps a pod claimed by two workloads as one row, with both claimants', () => {
-    const rows = podInventoryRows(items, new Set(['kyma-system']));
+    const rows = podInventoryRows(items, new Set(['platform-system']));
     const ctrl = rows.filter(p => p.name === 'ctrl-1');
     expect(ctrl).toHaveLength(1);
     expect(ctrl[0]!.owners).toEqual(['Deployment/ctrl-blue', 'Deployment/ctrl-green']);
@@ -175,18 +175,18 @@ describe('podInventoryRows', () => {
   it('gives the Pods table and its count the same rows for the same selection', () => {
     // The two call sites in ClusterDetail.tsx both come through here; if they ever disagreed, the
     // count and the table would too.
-    const selection = new Set(['applecare', 'kyma-system']);
+    const selection = new Set(['acme-shop', 'platform-system']);
     expect(ids(podInventoryRows(items, selection))).toEqual(ids(podInventoryRows(items, selection)));
   });
 
   it('an empty selection returns every pod, deduplicated', () => {
     expect(ids(podInventoryRows(items, ALL_NAMESPACES))).toEqual([
-      'applecare/Pod/care-api-1',
-      'applecare/Pod/care-api-2',
-      'applecare/Pod/redis-0',
+      'acme-shop/Pod/care-api-1',
+      'acme-shop/Pod/care-api-2',
+      'acme-shop/Pod/redis-0',
       'istio-system/Pod/istiod-1',
-      'kyma-system/Pod/ctrl-1',
-      'kyma-system/Pod/fluent-bit-1'
+      'platform-system/Pod/ctrl-1',
+      'platform-system/Pod/fluent-bit-1'
     ]);
   });
 });
@@ -203,7 +203,7 @@ describe('workloadPillCounts', () => {
   });
 
   it('follows the namespace selection, so each pill promises what it would reveal (requirement 10)', () => {
-    expect(workloadPillCounts(items, new Set(['applecare']))).toEqual({
+    expect(workloadPillCounts(items, new Set(['acme-shop']))).toEqual({
       all: 2,
       Deployment: 1,
       StatefulSet: 1,
@@ -213,7 +213,7 @@ describe('workloadPillCounts', () => {
   });
 
   it('adds up across an OR selection', () => {
-    expect(workloadPillCounts(items, new Set(['applecare', 'istio-system']))).toEqual({
+    expect(workloadPillCounts(items, new Set(['acme-shop', 'istio-system']))).toEqual({
       all: 3,
       Deployment: 2,
       StatefulSet: 1,
@@ -235,7 +235,7 @@ describe('workloadPillCounts', () => {
   });
 
   it('never promises more rows than the table draws, for any pill and any selection', () => {
-    for (const namespaces of [ALL_NAMESPACES, new Set(['applecare']), new Set(['kyma-system']), new Set(['applecare', 'kyma-system'])]) {
+    for (const namespaces of [ALL_NAMESPACES, new Set(['acme-shop']), new Set(['platform-system']), new Set(['acme-shop', 'platform-system'])]) {
       const counts = workloadPillCounts(items, namespaces);
       expect(counts.pods).toBe(podInventoryRows(items, namespaces).length);
       for (const kind of ['all', 'Deployment', 'StatefulSet', 'DaemonSet'] as const) {
@@ -252,7 +252,7 @@ describe('workloadPillCounts', () => {
   });
 
   it('reports zeros rather than throwing when the read returned nothing', () => {
-    expect(workloadPillCounts([], new Set(['applecare']))).toEqual({
+    expect(workloadPillCounts([], new Set(['acme-shop']))).toEqual({
       all: 0,
       Deployment: 0,
       StatefulSet: 0,
@@ -264,7 +264,7 @@ describe('workloadPillCounts', () => {
 
 describe('workloadShownOfTotal', () => {
   it('totals within the active pill, so the line names what the namespace filter hid', () => {
-    const f = state({ kind: 'Deployment', namespaces: new Set(['applecare']) });
+    const f = state({ kind: 'Deployment', namespaces: new Set(['acme-shop']) });
     expect(workloadShownOfTotal(items, f)).toEqual({ shown: 1, total: 4 });
     expect(resultLine(1, 4, 'deployments')).toBe('1 of 4 deployments');
   });
@@ -276,7 +276,7 @@ describe('workloadShownOfTotal', () => {
   });
 
   it('counts pods, not workloads, under the pods pill', () => {
-    expect(workloadShownOfTotal(items, state({ kind: 'pods', namespaces: new Set(['applecare']) }))).toEqual({
+    expect(workloadShownOfTotal(items, state({ kind: 'pods', namespaces: new Set(['acme-shop']) }))).toEqual({
       shown: 3,
       total: 6
     });
@@ -289,8 +289,8 @@ describe('activeWorkloadFilters', () => {
   });
 
   it('counts the namespace selection once, however many namespaces it holds', () => {
-    expect(activeWorkloadFilters(state({ namespaces: new Set(['applecare']) }))).toBe(1);
-    expect(activeWorkloadFilters(state({ namespaces: new Set(['applecare', 'kyma-system']) }))).toBe(1);
+    expect(activeWorkloadFilters(state({ namespaces: new Set(['acme-shop']) }))).toBe(1);
+    expect(activeWorkloadFilters(state({ namespaces: new Set(['acme-shop', 'platform-system']) }))).toBe(1);
   });
 
   it('does not count the kind pill, which the reset does not clear', () => {

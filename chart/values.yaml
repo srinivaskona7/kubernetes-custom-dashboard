@@ -1,18 +1,25 @@
-# SQLite is single-writer; do not scale beyond 1 replica.
+# Defaults are deliberately portable: no node selectors, no zone pinning, no
+# provider-specific annotations, no cloud storage class. Override in a
+# values-<cloud>.yaml if you want EKS/AKS/GKE tuning.
+
+# SQLite is single-writer; do not scale beyond 1 replica. See autoscaling below.
 replicaCount: 1
 
-# MUST stay Recreate while persistence.enabled is true (the chart fails to render
-# otherwise): the data PVC is ReadWriteOnce, and a RollingUpdate surge pod on a
-# different node deadlocks with "Multi-Attach error for volume".
+# MUST stay Recreate while persistence.enabled is true: the data PVC is
+# ReadWriteOnce, and a RollingUpdate surge pod on another node deadlocks with
+# "Multi-Attach error for volume". This is true on EBS, Azure Disk and PD alike.
 strategy:
   type: Recreate
 
 revisionHistoryLimit: 3
 
 image:
-  repository: 637248970961.dkr.ecr.us-west-2.amazonaws.com/btp-kyma-fleet-dashboard
-  pullPolicy: Always
-  tag: latest
+  # Any public registry works: ghcr.io/<org>/k8s-fleet-dashboard,
+  # docker.io/<user>/k8s-fleet-dashboard, <account>.dkr.ecr.<region>.amazonaws.com/...
+  repository: k8s-fleet-dashboard
+  pullPolicy: IfNotPresent
+  # Defaults to Chart.AppVersion when empty.
+  tag: ""
 
 imagePullSecrets: []
 
@@ -21,57 +28,47 @@ fullnameOverride: ""
 
 serviceAccount:
   create: true
-  name: "btp-kyma-fleet-dashboard"
-  automount: false
+  name: ""
+  # The app talks to an apiserver with this token, so the token must be mounted.
+  automount: true
+  # Provider workload-identity annotations go here, e.g.
+  #   EKS:   eks.amazonaws.com/role-arn: arn:aws:iam::<acct>:role/<role>
+  #   GKE:   iam.gke.io/gcp-service-account: <sa>@<project>.iam.gserviceaccount.com
+  #   AKS:   azure.workload.identity/client-id: <client-id>
   annotations: {}
 
+rbac:
+  # Cluster-wide read access is what makes the dashboard useful: it lists
+  # namespaces, nodes, workloads and events across every namespace. Scope it
+  # down with `clusterRole.rules` if your policy requires it.
+  create: true
+  clusterRole:
+    name: ""
+  # Secrets are read for Helm release metadata. Every value the UI renders is
+  # redacted server-side, but the token itself is cluster-wide, so treat the
+  # ServiceAccount as privileged for a read-only role.
+  readSecrets: true
+
 podAnnotations: {}
+podLabels: {}
 
 podSecurityContext:
-  fsGroup: 266
-
-# UID 265 matches the nonroot user in Apple UBI9 runtime base image
-securityContext:
   runAsNonRoot: true
-  runAsUser: 265
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
   allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
   capabilities:
     drop:
       - ALL
 
-# ClusterIP service. See shield-config/ and NOTES.txt for routing setup.
 service:
   type: ClusterIP
   port: 3001
   targetPort: 3001
-
-# Narrative CSI driver — auto-provisions the pod's TLS identity at /tls
-# (tls.crt, tls.key, ca.crt), used as the Whisper mTLS client certificate.
-# With podIdentity "true" this is the service-account pod identity (no person
-# DSID). The certificate's APRN is
-#   aprn:apple:aws:us-west-2:<account>:eks-service-account:dev-slm-datahub/btp-kyma-fleet-dashboard/btp-kyma-fleet-dashboard
-# (cluster/namespace/serviceAccount) regardless of `name`. Grant THAT APRN read
-# on the Whisper secret.
-narrative:
-  type: "actor"
-  domain: "aws"
-  name: "btp-kyma-fleet-dashboard"
-  podIdentity: "true"
-  fsGroup: "266"
-
-# Whisper configuration (passed as env vars)
-whisper:
-  secretName: "btp-kyma-fleet-dashboard-prod"
-  namespace: "btp-pltform-security"
-
-# SQLite data volume, mounted at /app/data (DB_PATH=/app/data/app.db).
-# Disabling it writes the DB to ephemeral container storage, LOST on every pod
-# restart — the chart refuses to render that unless allowEphemeral=true.
-persistence:
-  enabled: true
-  allowEphemeral: false
-  size: 1Gi
-  storageClass: ""
 
 ingress:
   enabled: false
@@ -81,46 +78,88 @@ ingress:
     - host: chart-example.local
       paths:
         - path: /
-          pathType: ImplementationSpecific
+          pathType: Prefix
   tls: []
 
-resources: {}
+# Sub-path the app is served under. Must match VITE_BASE_PATH used at image
+# build time; leave "/" unless you built the image with a prefix.
+basePath: /
 
-# Keep disabled — SQLite on a ReadWriteOnce volume supports a single replica.
+persistence:
+  # Fleet records and the app database live in SQLite at DB_PATH.
+  enabled: true
+  # Disabling persistence writes to ephemeral container storage and loses the
+  # registry on every restart. The chart refuses to render that unless
+  # allowEphemeral is set.
+  allowEphemeral: false
+  size: 1Gi
+  # Empty = the cluster's default StorageClass, which is the portable choice:
+  # EKS uses gp2/gp3, AKS managed-csi, GKE standard-rwo.
+  storageClass: ""
+  accessMode: ReadWriteOnce
+
+auth:
+  # none | oidc. `none` is refused when NODE_ENV=production, so a real
+  # deployment needs `oidc` unless it sits behind an authenticating proxy.
+  mode: oidc
+  # Required when mode=oidc: the issuer's public JWKS endpoint.
+  jwksUrl: ""
+  issuer: ""
+  audience: ""
+  # Comma-separated groups matched against the token's `groups` claim.
+  # Empty means any authenticated user may read.
+  allowedGroups: ""
+  # Groups allowed to add/remove clusters and renew credentials.
+  adminGroups: ""
+
+# Names of the Secrets the app writes the fleet registry into. They live in the
+# release namespace and are created on first write.
+registry:
+  tokensSecret: fleet-dashboard-tokens
+  clustersSecret: fleet-dashboard-clusters
+
+
+# Extra environment variables, as a list of {name, value} or {name, valueFrom}.
+extraEnv: []
+
+# A JSON config file mounted from a ConfigMap or Secret, if you keep the
+# cluster registry outside the database.
+appConfig:
+  existingSecret: ""
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1
+    memory: 512Mi
+
+# Keep disabled while persistence is enabled: SQLite on a ReadWriteOnce volume
+# supports a single replica.
 autoscaling:
   enabled: false
   minReplicas: 1
   maxReplicas: 2
   targetCPUUtilizationPercentage: 80
 
-nodeSelector:
-  topology.kubernetes.io/zone: us-west-2c
+podDisruptionBudget:
+  enabled: false
+  minAvailable: 1
 
+# Disabled by default: NetworkPolicy is enforced by the CNI, and the addon
+# differs across EKS (VPC CNI + policy agent), AKS and GKE. Enable it only
+# after checking your datapath enforces policy.
+networkPolicy:
+  enabled: false
+  ingress: []
+  egress: []
+
+nodeSelector: {}
 tolerations: []
-
 affinity: {}
 
-splunk:
-  enabled: true
-  image: docker.apple.com/splunk-ist/splunk-universalforwarder:latest
-  cluster: ist_prod
-  logPath: "/logs/*.log"
-  index: btp_platform_apps
-  sourcetype: btp_kyma_fleet_dashboard
-  blacklist: "\\.(gz|zip|bak)$"
-  ignoreOlderThan: "3d"
-
-networkPolicy:
-  enabled: true
-  splunkManagementCIDRs:
-    - "10.202.186.16/32"
-    - "10.202.184.21/32"
-  splunkIndexerCIDRs:
-    - "10.110.168.0/21"
-    - "10.202.56.0/21"
-
-auth:
-  allowedGroups: "12421088"
-
 logging:
-  level: "info"
+  level: info
+
+commonLabels: {}

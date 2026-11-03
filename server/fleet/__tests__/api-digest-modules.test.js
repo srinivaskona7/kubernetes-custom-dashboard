@@ -572,7 +572,7 @@ test('readTraceSince returns whole trace lines only and resumes where it stopped
     `{"level":"info","msg":"cache warm"}\n${JSON.stringify(b)}\n` +
     // The router's own audit lines: a request it finished, and a refusal, which is not one.
     '[fleet-audit] GET /api/fleet/clusters/c1/traffic?ns=a -> 200 (12ms) user=anonymous\n' +
-    '[fleet-audit] DENIED GET /api/fleet/clusters: user=anonymous lacks kyma-fleet-admin\n';
+    '[fleet-audit] DENIED GET /api/fleet/clusters: user=anonymous lacks fleet-admin\n';
   assert.notEqual(Buffer.byteLength(whole), whole.length);
   const pending = JSON.stringify(c);
 

@@ -443,7 +443,7 @@ describe('podCoverage', () => {
 const workload = (name: string, pods: unknown[]): WorkloadRow =>
   ({
     name,
-    namespace: 'kyma-system',
+    namespace: 'platform-system',
     cluster: 'c',
     kind: 'Deployment',
     ready: 1,
@@ -471,7 +471,7 @@ const workload = (name: string, pods: unknown[]): WorkloadRow =>
 
 const sharedPod = {
   name: 'controller-manager-abc',
-  namespace: 'kyma-system',
+  namespace: 'platform-system',
   phase: 'Running',
   restarts: 0,
   isOOMKilled: false,
@@ -494,7 +494,7 @@ const sharedPod = {
 
 describe('buildUtilizationModel', () => {
   it('counts a pod claimed by three overlapping selectors exactly once', () => {
-    // Three Deployments in kyma-system share `control-plane: controller-manager`, so the same pod
+    // Three Deployments in platform-system share `control-plane: controller-manager`, so the same pod
     // is legitimately present under all three. Summing the flattened list would report three
     // times this pod's memory in the cluster total and in its namespace row.
     const model = buildUtilizationModel(
@@ -536,7 +536,7 @@ describe('buildUtilizationModel', () => {
       3,
       flattenPods
     );
-    expect(model.namespaceNames).toEqual(['app', 'kyma-system']);
+    expect(model.namespaceNames).toEqual(['app', 'platform-system']);
   });
 
   it('survives an empty cluster without inventing a zero usage', () => {

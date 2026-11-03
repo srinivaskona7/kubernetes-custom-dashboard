@@ -15,7 +15,7 @@
  *
  * `ingress` — used only when some object in the release actually routes external traffic into a
  * Service of the release, which the graph states as a `routes-to` edge and nothing else. Under
- * `depth` that APIRule lands in whatever column the release reaches it in — typically beside the
+ * `depth` that Ingress lands in whatever column the release reaches it in — typically beside the
  * ConfigMaps, below eighteen workloads — and the one thing an operator opening this tab wants to
  * trace, *where does a request go*, is the one thing the picture does not show. So when there is a
  * request path, depth becomes the request path.
@@ -43,10 +43,10 @@ const RELEASE = 'release';
 
 /**
  * Kinds that can front external traffic. Membership alone earns tier 0 *only* for a node that also
- * has a `routes-to` edge — an APIRule with no readable backend is not a front door to anything, and
+ * has a `routes-to` edge — an Ingress with no readable backend is not a front door to anything, and
  * putting it at the head of the picture would claim a path the server never read.
  */
-const INGRESS_KINDS = new Set(['APIRule', 'Ingress', 'VirtualService', 'Gateway']);
+const INGRESS_KINDS = new Set(['Ingress', 'HTTPRoute', 'VirtualService', 'Gateway']);
 
 /** Kinds that serve or run a workload's traffic. Tier 1 when routed into, tier 2 otherwise. */
 const WORKLOAD_KINDS = new Set(['Deployment', 'StatefulSet', 'DaemonSet', 'CronJob']);

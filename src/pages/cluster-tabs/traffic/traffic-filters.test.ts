@@ -87,7 +87,7 @@ describe('the default state', () => {
   });
 
   test('an empty namespace set means all, so the default state hides nothing', () => {
-    const rows = [group({ proxies: [{ pod: 'p', namespace: 'applecare', container: 'istio-proxy', count: 1 }] })];
+    const rows = [group({ proxies: [{ pod: 'p', namespace: 'acme-shop', container: 'istio-proxy', count: 1 }] })];
     expect(filterGroups(rows, DEFAULT_TRAFFIC_FILTERS)).toHaveLength(1);
   });
 });
@@ -229,7 +229,7 @@ describe('the proxy-namespace filter', () => {
   });
   const care = group({
     key: 'b',
-    proxies: [{ pod: 'srv-1', namespace: 'applecare', container: 'istio-proxy', count: 2 }]
+    proxies: [{ pod: 'srv-1', namespace: 'acme-shop', container: 'istio-proxy', count: 2 }]
   });
 
   test('an empty selection admits everything', () => {
@@ -237,11 +237,11 @@ describe('the proxy-namespace filter', () => {
   });
 
   test('a selection keeps only groups a selected proxy logged', () => {
-    expect(filterGroups([istio, care], state({ namespaces: new Set(['applecare']) }))).toEqual([care]);
+    expect(filterGroups([istio, care], state({ namespaces: new Set(['acme-shop']) }))).toEqual([care]);
   });
 
   test('several namespaces are OR, not AND', () => {
-    const sel = new Set(['applecare', 'istio-system']);
+    const sel = new Set(['acme-shop', 'istio-system']);
     expect(filterGroups([istio, care], state({ namespaces: sel }))).toHaveLength(2);
   });
 
@@ -252,12 +252,12 @@ describe('the proxy-namespace filter', () => {
     const spread = group({
       proxies: [
         { pod: 'istio-ingressgateway-abc', namespace: 'istio-system', container: 'istio-proxy', count: 4 },
-        { pod: 'srv-1', namespace: 'applecare', container: 'istio-proxy', count: 1 }
+        { pod: 'srv-1', namespace: 'acme-shop', container: 'istio-proxy', count: 1 }
       ]
     });
-    expect(filterGroups([spread], state({ namespaces: new Set(['applecare']) }))).toHaveLength(1);
+    expect(filterGroups([spread], state({ namespaces: new Set(['acme-shop']) }))).toHaveLength(1);
     expect(filterGroups([spread], state({ namespaces: new Set(['istio-system']) }))).toHaveLength(1);
-    expect(filterGroups([spread], state({ namespaces: new Set(['kyma-system']) }))).toHaveLength(0);
+    expect(filterGroups([spread], state({ namespaces: new Set(['platform-system']) }))).toHaveLength(0);
   });
 
   test('a group carrying no proxy at all still shows under an empty selection', () => {
@@ -275,7 +275,7 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
   });
 
   test('host, which is the authority field', () => {
-    expect(keeps({ authority: 'shop.kyma.example' }, 'kyma.example')).toBe(1);
+    expect(keeps({ authority: 'shop.apps.example' }, 'apps.example')).toBe(1);
   });
 
   test('code, because the breakdown panels hand back a number and STATUS cannot express one', () => {
@@ -287,15 +287,15 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
       keeps(
         {
           upstream: {
-            raw: 'outbound|8080||srv.applecare.svc.cluster.local',
+            raw: 'outbound|8080||srv.acme-shop.svc.cluster.local',
             direction: 'outbound',
             port: 8080,
             subset: null,
-            fqdn: 'srv.applecare.svc.cluster.local',
+            fqdn: 'srv.acme-shop.svc.cluster.local',
             service: null
           }
         },
-        'srv.applecare'
+        'srv.acme-shop'
       )
     ).toBe(1);
   });
@@ -310,7 +310,7 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
             port: 8080,
             subset: null,
             fqdn: null,
-            service: { kind: 'Service', name: 'checkout', namespace: 'applecare', evidence: 'FQDN match' }
+            service: { kind: 'Service', name: 'checkout', namespace: 'acme-shop', evidence: 'FQDN match' }
           }
         },
         'checkout'
@@ -321,8 +321,8 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
   test('gateway name — populated on 381 of 430 groups where upstream is populated on 1', () => {
     expect(
       keeps(
-        { gateway: { name: 'kyma-gateway', namespace: 'kyma-system', host: '*.kyma.example', port: 443, evidence: 'server host' } },
-        'kyma-gateway'
+        { gateway: { name: 'main-gateway', namespace: 'platform-system', host: '*.apps.example', port: 443, evidence: 'server host' } },
+        'main-gateway'
       )
     ).toBe(1);
   });
@@ -330,8 +330,8 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
   test('gateway host', () => {
     expect(
       keeps(
-        { gateway: { name: 'kyma-gateway', namespace: 'kyma-system', host: 'api.kyma.example', port: 443, evidence: 'server host' } },
-        'api.kyma'
+        { gateway: { name: 'main-gateway', namespace: 'platform-system', host: 'api.apps.example', port: 443, evidence: 'server host' } },
+        'api.apps'
       )
     ).toBe(1);
   });
@@ -339,8 +339,8 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
   test('gateway namespace', () => {
     expect(
       keeps(
-        { gateway: { name: 'g', namespace: 'kyma-system', host: 'h', port: 443, evidence: 'server host' } },
-        'kyma-system'
+        { gateway: { name: 'g', namespace: 'platform-system', host: 'h', port: 443, evidence: 'server host' } },
+        'platform-system'
       )
     ).toBe(1);
   });
@@ -348,7 +348,7 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
   test('destination name', () => {
     expect(
       keeps(
-        { destination: { ip: '10.1.2.3', port: 8080, kind: 'Service', name: 'payments', namespace: 'applecare', evidence: 'EndpointSlice' } },
+        { destination: { ip: '10.1.2.3', port: 8080, kind: 'Service', name: 'payments', namespace: 'acme-shop', evidence: 'EndpointSlice' } },
         'payments'
       )
     ).toBe(1);
@@ -357,7 +357,7 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
   test('destination ip', () => {
     expect(
       keeps(
-        { destination: { ip: '10.1.2.3', port: 8080, kind: 'Service', name: 'payments', namespace: 'applecare', evidence: 'EndpointSlice' } },
+        { destination: { ip: '10.1.2.3', port: 8080, kind: 'Service', name: 'payments', namespace: 'acme-shop', evidence: 'EndpointSlice' } },
         '10.1.2'
       )
     ).toBe(1);
@@ -366,8 +366,8 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
   test('destination namespace', () => {
     expect(
       keeps(
-        { destination: { ip: '10.1.2.3', port: 8080, kind: 'Service', name: 'p', namespace: 'applecare', evidence: 'EndpointSlice' } },
-        'applecare'
+        { destination: { ip: '10.1.2.3', port: 8080, kind: 'Service', name: 'p', namespace: 'acme-shop', evidence: 'EndpointSlice' } },
+        'acme-shop'
       )
     ).toBe(1);
   });
@@ -398,7 +398,7 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
 
   test('source name', () => {
     expect(
-      keeps({ sources: [{ ip: '1.2.3.4', port: 55000, kind: 'pod', name: 'scanner-1', namespace: 'kyma-system', evidence: 'Pod IP' }] }, 'scanner-1')
+      keeps({ sources: [{ ip: '1.2.3.4', port: 55000, kind: 'pod', name: 'scanner-1', namespace: 'platform-system', evidence: 'Pod IP' }] }, 'scanner-1')
     ).toBe(1);
   });
 
@@ -410,7 +410,7 @@ describe('SEARCH reaches every field it claims, one assertion each', () => {
 
   test('source namespace — the *client’s* namespace, non-null on 1 of 430 groups', () => {
     expect(
-      keeps({ sources: [{ ip: '1.2.3.4', port: 1, kind: 'pod', name: 'p', namespace: 'kyma-system', evidence: 'Pod IP' }] }, 'kyma-system')
+      keeps({ sources: [{ ip: '1.2.3.4', port: 1, kind: 'pod', name: 'p', namespace: 'platform-system', evidence: 'Pod IP' }] }, 'platform-system')
     ).toBe(1);
   });
 
@@ -457,7 +457,7 @@ describe('the filters work together (requirement 3’s own example)', () => {
     class: 'server',
     method: 'GET',
     path: '/checkout',
-    proxies: [{ pod: 'srv-1', namespace: 'applecare', container: 'istio-proxy', count: 3 }]
+    proxies: [{ pod: 'srv-1', namespace: 'acme-shop', container: 'istio-proxy', count: 3 }]
   });
   const careClient = group({
     key: 'care-4xx',
@@ -465,7 +465,7 @@ describe('the filters work together (requirement 3’s own example)', () => {
     class: 'client',
     method: 'GET',
     path: '/checkout',
-    proxies: [{ pod: 'srv-1', namespace: 'applecare', container: 'istio-proxy', count: 9 }]
+    proxies: [{ pod: 'srv-1', namespace: 'acme-shop', container: 'istio-proxy', count: 9 }]
   });
   const istioServer = group({
     key: 'istio-5xx',
@@ -477,22 +477,22 @@ describe('the filters work together (requirement 3’s own example)', () => {
   });
   const rows = [careServer, careClient, istioServer];
 
-  test('Namespace = applecare, Status = 5xx, Time = Last 6 hours shows only matching data', () => {
-    const picked = state({ namespaces: new Set(['applecare']), status: 'server', range: '6h' });
+  test('Namespace = acme-shop, Status = 5xx, Time = Last 6 hours shows only matching data', () => {
+    const picked = state({ namespaces: new Set(['acme-shop']), status: 'server', range: '6h' });
     expect(filterGroups(rows, picked)).toEqual([careServer]);
     // The range is not a row predicate: it is sent to the route, which re-reads the proxies.
     expect(sinceSecondsFor(picked)).toBe(21600);
   });
 
   test('adding a search narrows further without losing the other three', () => {
-    const picked = state({ namespaces: new Set(['applecare']), status: 'server', search: 'checkout' });
+    const picked = state({ namespaces: new Set(['acme-shop']), status: 'server', search: 'checkout' });
     expect(filterGroups(rows, picked)).toEqual([careServer]);
     expect(filterGroups(rows, state({ ...picked, search: 'nowhere' }))).toEqual([]);
   });
 
   test('every control applied at once still returns the one row that satisfies all of them', () => {
     const picked = state({
-      namespaces: new Set(['applecare']),
+      namespaces: new Set(['acme-shop']),
       status: 'server',
       method: 'GET',
       search: '503',
@@ -504,14 +504,14 @@ describe('the filters work together (requirement 3’s own example)', () => {
   test('the order the filters are applied in never changes the result', () => {
     // AND commutes, and a test pins it because "the filters work together" is exactly the claim a
     // reordering refactor — done for cost, as the predicate order here was — breaks silently.
-    const both = state({ namespaces: new Set(['applecare']), status: 'server', method: 'GET', search: 'checkout' });
+    const both = state({ namespaces: new Set(['acme-shop']), status: 'server', method: 'GET', search: 'checkout' });
     const nsFirst = filterGroups(
-      filterGroups(rows, state({ namespaces: new Set(['applecare']) })),
+      filterGroups(rows, state({ namespaces: new Set(['acme-shop']) })),
       state({ status: 'server', method: 'GET', search: 'checkout' })
     );
     const searchFirst = filterGroups(
       filterGroups(rows, state({ search: 'checkout' })),
-      state({ namespaces: new Set(['applecare']), status: 'server', method: 'GET' })
+      state({ namespaces: new Set(['acme-shop']), status: 'server', method: 'GET' })
     );
     expect(nsFirst).toEqual(filterGroups(rows, both));
     expect(searchFirst).toEqual(filterGroups(rows, both));
@@ -538,19 +538,19 @@ describe('activeTrafficFilters counts what Clear filters would clear', () => {
     expect(activeTrafficFilters(state({ status: 'server' }))).toBe(1);
     expect(activeTrafficFilters(state({ method: 'GET' }))).toBe(1);
     expect(activeTrafficFilters(state({ search: 'checkout' }))).toBe(1);
-    expect(activeTrafficFilters(state({ namespaces: new Set(['applecare']) }))).toBe(1);
+    expect(activeTrafficFilters(state({ namespaces: new Set(['acme-shop']) }))).toBe(1);
     expect(activeTrafficFilters(state({ range: '15m' }))).toBe(1);
   });
 
   test('a multi-select counts once, not once per namespace', () => {
-    const sel = new Set(['applecare', 'istio-system', 'kyma-system']);
+    const sel = new Set(['acme-shop', 'istio-system', 'platform-system']);
     expect(activeTrafficFilters(state({ namespaces: sel }))).toBe(1);
   });
 
   test('counts every control when all five are set', () => {
     expect(
       activeTrafficFilters(
-        state({ namespaces: new Set(['applecare']), range: '7d', status: 'client', method: 'GET', search: 'x' })
+        state({ namespaces: new Set(['acme-shop']), range: '7d', status: 'client', method: 'GET', search: 'x' })
       )
     ).toBe(5);
   });

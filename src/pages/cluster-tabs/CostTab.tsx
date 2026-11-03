@@ -5,14 +5,14 @@
  * ## Why this tab talks about itself more than the others do
  *
  * Every other tab renders facts read from the cluster. This one renders facts *multiplied by a
- * rate card*, and the rate card is not readable from anywhere — not from the cluster, not from SAP
- * BTP, not from the hyperscaler. So the screen has three obligations no other tab carries:
+ * rate card*, and the rate card is not readable from anywhere — not from the cluster, not from the
+ * cloud provider, not from the hyperscaler. So the screen has three obligations no other tab carries:
  *
  *   1. **Say it is an estimate, everywhere it shows money.** Not in a footnote. An operator who
  *      takes one of these figures into a budget conversation as an invoice figure has been
  *      misled by this screen, and "$1,103.76" to the cent invites exactly that.
- *   2. **Show the two meters as two meters.** USD list price plus the Kyma surcharge is the
- *      authoritative one; SAP Capacity Units are a second, normalized model that disagrees with
+ *   2. **Show the two meters as two meters.** USD list price is the
+ *      authoritative one; Capacity Units are a second, normalized model that disagrees with
  *      it by around 20%. Printing them side by side without that number lets an operator
  *      discover the gap by multiplying and getting a third answer.
  *   3. **Never turn an unknown into a zero, and qualify every figure the same way.** A node whose
@@ -77,8 +77,8 @@ type CostProvenance = RateCardProvenance & {
   `/clusters/:id/cost` still returns a derived `monthlyEur`, and presenting it beside the dollar
   figure put two currencies and two meters — four numbers for one machine — in front of an operator
   whose next action depends on exactly one of them. USD is the authoritative figure for this feature,
-  so USD is the only money rendered; the Capacity Unit meter stays because it is what SAP actually
-  bills, and it is stated in CU, not converted.
+  so USD is the only money rendered; the Capacity Unit meter stays because it is how some providers
+  bill, and it is stated in CU, not converted.
 */
 function signedUsd(n: number | null): string {
   if (n === null) return '—';
@@ -380,17 +380,17 @@ export default function CostTab({ id }: { id: string }) {
       */}
       <div className="rounded-[8px] border border-line bg-raised p-4 text-[13px] leading-relaxed text-muted">
         <span className="font-semibold text-text">These figures are an estimate, not a bill.</span> Nothing on this tab is read from
-        an SAP BTP or hyperscaler invoice — no such API is reachable from this console. Each node&apos;s declared machine type and
+        a cloud provider or hyperscaler invoice — no such API is reachable from this console. Each node&apos;s declared machine type and
         capacity is priced against a rate card held on the server ({rateCardProvenance(prov)}), at{' '}
         {summary?.hoursPerMonth ?? 730} hours per month. Reserved instances, savings plans, storage, egress, load balancers and
         support are not modelled and would each move the real figure.
         {summary?.modelDivergencePct !== null && summary?.modelDivergencePct !== undefined && (
           <>
             {' '}
-            The <span className="text-text">SAP Capacity Unit</span> column is a second, independent model: on this cluster it values
+            The <span className="text-text">Capacity Unit</span> column is a second, independent model: on this cluster it values
             the same hardware {Math.abs(summary.modelDivergencePct)}% {summary.modelDivergencePct >= 0 ? 'above' : 'below'} the dollar
             figure ({qualifiedUsd(summary.monthlyUsdOnCuMeter, qualifier)} against {qualifiedUsd(summary.monthlyUsd, qualifier)} per month). Both are shown; neither is
-            reconciled into the other — the dollar column is hyperscaler list rate plus the Kyma management fee, while a
+            reconciled into the other — the dollar column is hyperscaler list rate, while a
             Capacity Unit is a normalized {summary.cuUnitCpu} vCPU / {summary.cuUnitMemGiB} GiB node-hour at{' '}
             {summary.cuHourlyPerUnit} CU, billed at {usd(summary.cuRateUsd, 2)} per CU.
           </>
@@ -399,7 +399,7 @@ export default function CostTab({ id }: { id: string }) {
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatTile
-          label="Projected spend (USD list + Kyma fee)"
+          label="Projected spend (USD list)"
           status={nodeStatus}
           value={<MetricValue status={nodeStatus} size="lg">{qualifiedUsd(summary?.monthlyUsd, qualifier)}</MetricValue>}
           caption={qualifierCaption(qualifier, summary?.unpricedNodes, prov?.derivedRateNodes)}

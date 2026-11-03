@@ -1,55 +1,48 @@
 {{- if and .Values.persistence.enabled (ne .Values.strategy.type "Recreate") }}
-{{- fail (printf "strategy.type is %q but persistence.enabled is true. The data PVC is ReadWriteOnce, so an EBS volume attaches to ONE node at a time. Under RollingUpdate the new pod is created before the old one is terminated; if it lands on a different node it hangs forever in ContainerCreating with 'Multi-Attach error for volume'. Recreate also keeps two processes from ever writing the same single-writer SQLite file. Use strategy.type=Recreate, or set persistence.enabled=false (accepting data loss)." .Values.strategy.type) }}
+{{- fail (printf "strategy.type is %q but persistence.enabled is true. The data PVC is ReadWriteOnce and attaches to one node at a time; a RollingUpdate surge pod can hang in ContainerCreating with 'Multi-Attach error for volume'. Use strategy.type=Recreate, or set persistence.enabled=false with persistence.allowEphemeral=true to accept data loss." .Values.strategy.type) }}
 {{- end }}
 {{- if and (not .Values.persistence.enabled) (not .Values.persistence.allowEphemeral) }}
-{{- fail "persistence.enabled is false: the SQLite database would be written to ephemeral container storage and LOST on every pod restart. Set persistence.enabled=true, or persistence.allowEphemeral=true to accept data loss." }}
+{{- fail "persistence.enabled is false: fleet records would be written to ephemeral container storage and lost on every restart. Set persistence.enabled=true, or persistence.allowEphemeral=true to accept that." }}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "btp-kyma-fleet-dashboard.fullname" . }}
+  name: {{ include "k8s-fleet-dashboard.fullname" . }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "btp-kyma-fleet-dashboard.labels" . | nindent 4 }}
+    {{- include "k8s-fleet-dashboard.labels" . | nindent 4 }}
 spec:
   {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
   {{- end }}
-  # Recreate, not RollingUpdate — terminating the old pod first is what detaches
-  # the ReadWriteOnce data volume so the new pod can attach it.
   strategy:
     type: {{ .Values.strategy.type }}
     {{- if eq .Values.strategy.type "Recreate" }}
-    # Explicit null: valid on a fresh install (unmarshals to nil). It does NOT fix
-    # upgrades of a Deployment first created as RollingUpdate — Kubernetes
-    # server-defaults rollingUpdate onto it (Forbidden under Recreate) and Helm
-    # strips this null from its patch. scripts/helm-deploy.sh removes the live
-    # field with kubectl before helm upgrade runs.
     rollingUpdate: null
     {{- end }}
   revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
   selector:
     matchLabels:
-      {{- include "btp-kyma-fleet-dashboard.selectorLabels" . | nindent 6 }}
+      {{- include "k8s-fleet-dashboard.selectorLabels" . | nindent 6 }}
   template:
     metadata:
-      {{- if or .Values.splunk.enabled .Values.podAnnotations }}
       annotations:
-        {{- if .Values.splunk.enabled }}
-        checksum/splunk-inputs: {{ include (print $.Template.BasePath "/splunk-configmap.yaml") . | sha256sum | quote }}
-        {{- end }}
+        # Roll the pods when the config changes without needing `helm upgrade --force`.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- end }}
       labels:
-        {{- include "btp-kyma-fleet-dashboard.selectorLabels" . | nindent 8 }}
+        {{- include "k8s-fleet-dashboard.selectorLabels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "btp-kyma-fleet-dashboard.serviceAccountName" . }}
+      serviceAccountName: {{ include "k8s-fleet-dashboard.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -60,38 +53,57 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http
-              containerPort: 3001
+              containerPort: {{ .Values.service.targetPort }}
               protocol: TCP
           env:
             - name: NODE_ENV
               value: "production"
             - name: PORT
-              value: "3001"
+              value: {{ .Values.service.targetPort | quote }}
             - name: LOG_LEVEL
-              value: "{{ .Values.logging.level }}"
+              value: {{ .Values.logging.level | quote }}
+            - name: BASE_PATH
+              value: {{ .Values.basePath | quote }}
+            - name: AUTH_MODE
+              value: {{ .Values.auth.mode | quote }}
+            {{- if .Values.auth.jwksUrl }}
+            - name: OIDC_JWKS_URL
+              value: {{ .Values.auth.jwksUrl | quote }}
+            {{- end }}
+            {{- if .Values.auth.issuer }}
+            - name: OIDC_ISSUER
+              value: {{ .Values.auth.issuer | quote }}
+            {{- end }}
+            {{- if .Values.auth.audience }}
+            - name: OIDC_AUDIENCE
+              value: {{ .Values.auth.audience | quote }}
+            {{- end }}
+            {{- if .Values.auth.allowedGroups }}
+            - name: ALLOWED_GROUPS
+              value: {{ .Values.auth.allowedGroups | quote }}
+            {{- end }}
+            {{- if .Values.auth.adminGroups }}
+            - name: FLEET_ADMIN_GROUPS
+              value: {{ .Values.auth.adminGroups | quote }}
+            {{- end }}
+            - name: FLEET_TOKENS_SECRET
+              value: {{ default "fleet-dashboard-tokens" .Values.registry.tokensSecret | quote }}
+            - name: FLEET_CLUSTERS_SECRET
+              value: {{ default "fleet-dashboard-clusters" .Values.registry.clustersSecret | quote }}
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-            - name: WHISPER_SECRET_NAME
-              value: "{{ .Values.whisper.secretName }}"
-            - name: WHISPER_NAMESPACE
-              value: "{{ .Values.whisper.namespace }}"
-            - name: WHISPER_CLIENT_CERT_PATH
-              value: "/tls/tls.crt"
-            - name: WHISPER_CLIENT_KEY_PATH
-              value: "/tls/tls.key"
-            - name: WHISPER_CLIENT_CA_PATH
-              value: "/tls/ca.crt"
-            - name: DOTENV_CONFIG_QUIET
-              value: "true"
-            - name: BASE_PATH
-              value: "/btp-kyma-fleet-dashboard/"
-            - name: ALLOWED_GROUPS
-              value: {{ .Values.auth.allowedGroups | quote }}
             {{- if .Values.persistence.enabled }}
             - name: DB_PATH
               value: "/app/data/app.db"
+            {{- end }}
+            {{- if .Values.appConfig.existingSecret }}
+            - name: APP_CONFIG_FILE
+              value: /etc/fleet-dashboard/config.json
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
             {{- end }}
           livenessProbe:
             httpGet:
@@ -112,74 +124,26 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           volumeMounts:
-            - name: app-logs
-              mountPath: /logs
-            - name: tls
-              mountPath: /tls
             {{- if .Values.persistence.enabled }}
             - name: data
               mountPath: /app/data
             {{- end }}
-        {{- if .Values.splunk.enabled }}
-        - name: splunkforwarder
-          image: {{ .Values.splunk.image }}
-          imagePullPolicy: IfNotPresent
-          env:
-            - name: SPLUNK_CLUSTER
-              value: "{{ .Values.splunk.cluster }}"
-          resources:
-            requests:
-              cpu: 200m
-              memory: 1Gi
-            limits:
-              cpu: 1
-              memory: 1Gi
-          volumeMounts:
-            - name: app-logs
-              mountPath: /logs
-            - name: splunkforwarder-temp
-              mountPath: /opt/splunkforwarder/var
-            - name: splunkforwarder-config
-              mountPath: /etc/splunk/custom_inputs/app1
+            {{- if .Values.appConfig.existingSecret }}
+            - name: app-config
+              mountPath: /etc/fleet-dashboard
               readOnly: true
-            - name: podinfo
-              mountPath: /etc/splunk/podinfo
-              readOnly: true
-        {{- end }}
+            {{- end }}
       volumes:
-        - name: app-logs
-          emptyDir: {}
-        - name: splunkforwarder-temp
-          emptyDir: {}
         {{- if .Values.persistence.enabled }}
         - name: data
           persistentVolumeClaim:
-            claimName: {{ include "btp-kyma-fleet-dashboard.fullname" . }}-data
+            claimName: {{ include "k8s-fleet-dashboard.fullname" . }}-data
         {{- end }}
-        {{- if .Values.splunk.enabled }}
-        - name: splunkforwarder-config
-          configMap:
-            name: {{ include "btp-kyma-fleet-dashboard.fullname" . }}-splunk-inputs
+        {{- if .Values.appConfig.existingSecret }}
+        - name: app-config
+          secret:
+            secretName: {{ .Values.appConfig.existingSecret }}
         {{- end }}
-        - name: podinfo
-          downwardAPI:
-            items:
-              - path: "labels"
-                fieldRef:
-                  fieldPath: metadata.labels
-              - path: "uid"
-                fieldRef:
-                  fieldPath: metadata.uid
-        - name: tls
-          csi:
-            readOnly: true
-            driver: narrative.apple.com
-            volumeAttributes:
-              narrative.apple.com/type: "{{ .Values.narrative.type }}"
-              narrative.apple.com/domain: "{{ .Values.narrative.domain }}"
-              narrative.apple.com/name: "{{ .Values.narrative.name }}"
-              narrative.apple.com/pod-identity: "{{ .Values.narrative.podIdentity }}"
-              narrative.apple.com/fs-group: "{{ .Values.narrative.fsGroup }}"
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

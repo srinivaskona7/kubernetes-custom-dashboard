@@ -21,8 +21,6 @@ const FAKE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '
  *  2. Only the four files that must fetch, fetch. The seven tabs would otherwise each pull the
  *     release list and disagree with each other about the same release.
  *  3. No Secret value and no raw release record can reach the browser through these components.
- *
- * @see test/fleet/opa-ui-readonly.test.js — the same three checks over the OPA surface
  */
 
 

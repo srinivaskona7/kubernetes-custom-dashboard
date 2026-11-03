@@ -1,29 +1,24 @@
 {
-  "name": "platform-btp-kyma-fleet-dashboard",
+  "name": "k8s-fleet-dashboard",
   "version": "1.0.0",
   "private": true,
+  "description": "Read-only fleet dashboard for any conformant Kubernetes cluster (EKS, AKS, GKE, kind, OpenShift).",
   "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
   "scripts": {
     "dev": "concurrently \"node server/index.js\" \"vite\"",
     "test": "vitest run",
     "build": "vite build",
-    "start": "NODE_EXTRA_CA_CERTS=./node_modules/@apple/node-corp-certs/certs.pem NODE_ENV=production node server/index.js",
-    "cert:generate": "node scripts/generate-narrative-cert.cjs",
-    "push": "bash scripts/push.sh",
-    "wipe": "bash scripts/wipe.sh",
-    "deploy:clean": "npm run wipe && npm run push",
-    "docker:build": "docker buildx build --platform=linux/amd64 --load -t ${IMAGE_REPO:-btp-kyma-fleet-dashboard}:latest .",
-    "ecr:login": "aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin 637248970961.dkr.ecr.us-west-2.amazonaws.com",
-    "ecr:build": "docker buildx build --platform=linux/amd64 --load -t 637248970961.dkr.ecr.us-west-2.amazonaws.com/btp-kyma-fleet-dashboard:latest .",
-    "ecr:push": "docker push 637248970961.dkr.ecr.us-west-2.amazonaws.com/btp-kyma-fleet-dashboard:latest",
-    "ecr:deploy": "npm run ecr:login && npm run ecr:build && npm run ecr:push && kubectl rollout restart deployment btp-kyma-fleet-dashboard -n btp-kyma-fleet-dashboard && kubectl rollout status deployment btp-kyma-fleet-dashboard -n btp-kyma-fleet-dashboard",
-    "helm:deploy": "helm upgrade --install btp-kyma-fleet-dashboard ./chart -n btp-kyma-fleet-dashboard --create-namespace --set image.repository=637248970961.dkr.ecr.us-west-2.amazonaws.com/btp-kyma-fleet-dashboard",
-    "helm:deploy:dry-run": "helm upgrade --install btp-kyma-fleet-dashboard ./chart -n btp-kyma-fleet-dashboard --create-namespace --set image.repository=637248970961.dkr.ecr.us-west-2.amazonaws.com/btp-kyma-fleet-dashboard --dry-run --debug",
-    "deploy": "npm run build && npm run ecr:deploy && npm run helm:deploy"
+    "start": "NODE_ENV=production node server/index.js",
+    "docker:build": "docker build -t ${IMAGE_REPO:-k8s-fleet-dashboard}:${IMAGE_TAG:-latest} .",
+    "docker:run": "docker run --rm -p 3001:3001 -e AUTH_MODE=none ${IMAGE_REPO:-k8s-fleet-dashboard}:${IMAGE_TAG:-latest}",
+    "helm:template": "helm template k8s-fleet-dashboard ./chart",
+    "helm:lint": "helm lint ./chart",
+    "helm:install": "helm upgrade --install k8s-fleet-dashboard ./chart -n fleet-dashboard --create-namespace --set image.repository=${IMAGE_REPO:-k8s-fleet-dashboard} --set image.tag=${IMAGE_TAG:-latest}"
   },
   "dependencies": {
-    "@apple/node-corp-certs": "^2.0.6",
-    "axios": "^1.7.9",
     "better-sqlite3": "^12.11.1",
     "dotenv": "^16.6.1",
     "express": "^4.21.0",

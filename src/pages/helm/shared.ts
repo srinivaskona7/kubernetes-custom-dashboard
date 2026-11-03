@@ -116,7 +116,7 @@ export const EDGE: Record<HelmEdgeType, { label: string; colour: string; why: st
   },
   owner: { label: 'Owner', colour: '#5eb87a', why: 'metadata.ownerReferences on the target names the source.' },
   selector: { label: 'Selector', colour: '#5eb87a', why: 'The source’s label selector matches the target’s labels.' },
-  'routes-to': { label: 'Routes to', colour: '#4a9fd8', why: 'An Ingress, APIRule or VirtualService names the target as a backend.' },
+  'routes-to': { label: 'Routes to', colour: '#4a9fd8', why: 'An Ingress, HTTPRoute or VirtualService names the target as a backend.' },
   targets: { label: 'Targets', colour: '#4a9fd8', why: 'A scaleTargetRef or equivalent names the target directly.' },
   mounts: { label: 'Mounts', colour: '#d8a24a', why: 'A volume on the source mounts the target.' },
   references: { label: 'References', colour: '#d8a24a', why: 'A valueFrom, envFrom or secretName on the source names the target.' },
@@ -242,10 +242,10 @@ const TILE_SPEC: { key: string; label: string; kinds: string[]; word: string; la
   { key: 'services', label: 'Services', kinds: ['Service'], word: 'with endpoints', labels: ['services', 'endpointslices'] },
   {
     key: 'routing',
-    label: 'Ingress / APIRules',
-    kinds: ['Ingress', 'APIRule', 'VirtualService', 'Gateway'],
+    label: 'Ingress / Routes',
+    kinds: ['Ingress', 'HTTPRoute', 'VirtualService', 'Gateway'],
     word: 'routing',
-    labels: ['ingresses', 'apirules', 'virtualservices', 'istio-gateways']
+    labels: ['ingresses', 'httproutes', 'virtualservices', 'istio-gateways']
   },
   { key: 'hpa', label: 'Autoscalers', kinds: ['HorizontalPodAutoscaler'], word: 'scaling', labels: ['hpa'] },
   { key: 'pvc', label: 'Volume claims', kinds: ['PersistentVolumeClaim'], word: 'Bound', labels: ['pvcs'] },

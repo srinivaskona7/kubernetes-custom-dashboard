@@ -95,15 +95,15 @@ describe('logReadVerdict', () => {
       log({
         readable: false,
         recordedElsewhere: true,
-        providers: ['kyma-logs'],
+        providers: ['otel-logs'],
         providerDetail: [
-          { name: 'kyma-logs', kind: 'otlp', implementation: 'envoyOtelAls', readable: false, destination: 'telemetry-otlp:4317', fields: 'otel' }
+          { name: 'otel-logs', kind: 'otlp', implementation: 'envoyOtelAls', readable: false, destination: 'telemetry-otlp:4317', fields: 'otel' }
         ]
       })
     );
     expect(v.state).toBe('unavailable');
     // The sink is named, because "not read" with no reason reads as a broken page.
-    expect(v.why).toContain('kyma-logs');
+    expect(v.why).toContain('otel-logs');
   });
 
   it('refuses to call an empty window a zero when the log destination was never confirmed', () => {

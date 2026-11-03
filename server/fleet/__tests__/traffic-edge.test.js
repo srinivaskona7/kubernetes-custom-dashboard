@@ -1,10 +1,10 @@
 /*
   The edge, classified (srv/fleet/collectors/edge.js) and wired into /traffic-errors.
 
-  The shapes here are the ones platformsbx served on 2026-09-26: a healthz probe dominating the
-  sample, the `apple-acl` ALLOW policy refusing with `rbac_access_denied_matched_policy[none]`,
-  TLS connections dying at `filter_chain_not_found`, twelve `stats-filter-1.1x` EnvoyFilters that
-  cannot match Istio 1.30, and a Gardener Certificate carrying `status.renewalDate`.
+  The shapes here are the ones a live Istio edge serves: a healthz probe dominating the sample, an
+  `edge-acl` ALLOW policy refusing with `rbac_access_denied_matched_policy[none]`, TLS connections
+  dying at `filter_chain_not_found`, `stats-filter-1.1x` EnvoyFilters that cannot match Istio 1.30,
+  and a cert-manager Certificate carrying `status.renewalTime`.
 */
 
 import { test } from 'vitest';
@@ -20,11 +20,11 @@ const gone = reason => ({ items: [], unavailable: true, reason, detail: null, tr
 const CTX = {
   // The shape `buildIndex` in traffic.js really hands over: rows, not strings. A string fixture hid
   // a bug where every Gateway-admitted host fell to direct-ip.
-  gatewayHosts: [{ host: '*.c.example.com', name: 'kyma-gateway', namespace: 'kyma-system', port: 443 }],
+  gatewayHosts: [{ host: '*.c.example.com', name: 'public-gateway', namespace: 'istio-system', port: 443 }],
   routes: [
-    { host: 'shop.c.example.com', kind: 'APIRule', name: 'shop', namespace: 'shop' },
-    { host: '*.c.example.com', kind: 'VirtualService', name: 'wild', namespace: 'kyma-system' },
-    { host: 'grafana.c.example.com', kind: 'VirtualService', name: 'grafana', namespace: 'kyma-system' }
+    { host: 'shop.c.example.com', kind: 'Ingress', name: 'shop', namespace: 'shop' },
+    { host: '*.c.example.com', kind: 'VirtualService', name: 'wild', namespace: 'istio-system' },
+    { host: 'grafana.c.example.com', kind: 'VirtualService', name: 'grafana', namespace: 'istio-system' }
   ]
 };
 
@@ -43,7 +43,6 @@ test('every record gets exactly one class, first match wins', () => {
   assert.strictEqual(c({ authority: 'shop.other.org' }), 'direct-ip', 'admitted by no Gateway and no route');
   assert.strictEqual(c({ code: 403, responseCodeDetails: 'rbac_access_denied_matched_policy[none]' }), 'policy-blocked');
   assert.strictEqual(c({ authority: 'healthz.c.example.com' }), 'probe');
-  assert.strictEqual(c({ authority: 'cp.c.example.com' }), 'platform');
   assert.strictEqual(c({ authority: 'grafana.c.example.com' }), 'platform', 'routed to a system namespace');
   // The wildcard system route must not swallow an app host that has its own route.
   assert.strictEqual(c({}), 'app');
@@ -77,38 +76,42 @@ test('the app headline counts app traffic only, and withholds p95 under the samp
 // ------------------------------------------------------------------ certificates
 
 const NOW = Date.parse('2026-09-26T00:00:00Z');
-function cert(name, { expires, renewal, state = 'Ready', secret = name } = {}) {
+/** A cert-manager `cert-manager.io/v1` Certificate. */
+function cert(name, { expires, renewal, ready = true, secret = name } = {}) {
   return {
     metadata: { name, namespace: 'istio-system' },
-    spec: { commonName: `${name}.example.com`, secretRef: { name: secret, namespace: 'istio-system' } },
-    status: { expirationDate: expires, renewalDate: renewal, state, issuerRef: { name: 'garden' } }
+    spec: { commonName: `${name}.example.com`, secretName: secret, issuerRef: { name: 'letsencrypt', kind: 'ClusterIssuer' } },
+    status: { notAfter: expires, renewalTime: renewal, conditions: [{ type: 'Ready', status: ready ? 'True' : 'False' }] }
   };
 }
 
 test('certificates join Gateway servers by Secret name and warn only on a missed renewal', () => {
-  const gatewayRows = [{ key: 'kyma-system/kyma-gateway#https', namespace: 'kyma-system', name: 'kyma-gateway', port: 443, tlsMode: 'SIMPLE', credentialName: 'kyma-tls', hosts: ['*.c.example.com'] }];
+  const gatewayRows = [{ key: 'istio-system/public-gateway#https', namespace: 'istio-system', name: 'public-gateway', port: 443, tlsMode: 'SIMPLE', credentialName: 'public-tls', hosts: ['*.c.example.com'] }];
   const certs = edge.certificateRows(ok([
-    cert('kyma-tls', { expires: '2026-11-04T00:00:00Z', renewal: '2026-10-05T00:00:00Z' }),
+    cert('public-tls', { expires: '2026-11-04T00:00:00Z', renewal: '2026-10-05T00:00:00Z' }),
     cert('late', { expires: '2026-10-20T00:00:00Z', renewal: '2026-09-20T00:00:00Z' }),
     cert('soon', { expires: '2026-09-30T00:00:00Z', renewal: '2026-08-31T00:00:00Z' }),
-    cert('broken', { expires: '2026-12-01T00:00:00Z', renewal: '2026-11-01T00:00:00Z', state: 'Error' })
+    cert('broken', { expires: '2026-12-01T00:00:00Z', renewal: '2026-11-01T00:00:00Z', ready: false })
   ]), gatewayRows, NOW);
   const byName = Object.fromEntries(certs.items.map(c => [c.name, c]));
-  assert.deepEqual(byName['kyma-tls'].usedBy, ['kyma-system/kyma-gateway#https']);
-  assert.strictEqual(byName['kyma-tls'].daysLeft, 39);
-  assert.strictEqual(byName['kyma-tls'].renewalOverdue, false);
+  assert.deepEqual(byName['public-tls'].usedBy, ['istio-system/public-gateway#https']);
+  assert.strictEqual(byName['public-tls'].daysLeft, 39);
+  assert.strictEqual(byName['public-tls'].renewalOverdue, false);
+  assert.strictEqual(byName['public-tls'].renewalDate, '2026-10-05T00:00:00Z', 'status.renewalTime is the renewal date');
+  assert.strictEqual(byName['public-tls'].issuer, 'letsencrypt');
+  assert.strictEqual(byName['public-tls'].secretName, 'public-tls');
 
   const att = edge.attentionOf({ certificates: certs, app: { hosts: [] }, hosts: [], routes: [], access: { peerAuthentications: [] }, envoyFilters: { dead: 0 }, gatewayRows });
   const kinds = att.map(a => `${a.severity}:${a.ref}`);
-  assert.ok(!kinds.some(k => k.endsWith('kyma-tls')), '39 days before a pending renewal is steady state');
+  assert.ok(!kinds.some(k => k.endsWith('public-tls')), '39 days before a pending renewal is steady state');
   assert.ok(kinds.includes('warning:istio-system/late'));
   assert.ok(kinds.includes('critical:istio-system/soon'));
   assert.ok(kinds.includes('critical:istio-system/broken'));
   assert.strictEqual(att[0].severity, 'critical');
 
-  const chain = edge.hostChain('shop.c.example.com', { gatewayRows, certificates: certs, dnsEntries: { items: [], unavailable: true } });
-  assert.strictEqual(chain.dns, undefined, 'an unread DNSEntry list is unknown, not absent');
-  assert.strictEqual(chain.servers[0].certificate.name, 'kyma-tls');
+  const chain = edge.hostChain('shop.c.example.com', { gatewayRows, certificates: certs });
+  assert.equal('dns' in chain, false, 'no vendor DNS object is joined');
+  assert.strictEqual(chain.servers[0].certificate.name, 'public-tls');
 });
 
 test('an unreadable Certificate list says so instead of reading as none', () => {
@@ -119,7 +122,7 @@ test('an unreadable Certificate list says so instead of reading as none', () => 
 // ------------------------------------------------------------------ EnvoyFilters and access
 
 test('an EnvoyFilter whose proxyVersion cannot match the running Istio is dead', () => {
-  const pods = ok([{ metadata: { labels: { app: 'istiod' } }, spec: { containers: [{ image: 'europe-docker.pkg.dev/kyma-project/prod/external/istio/pilot:1.30.4-distroless' }] } }]);
+  const pods = ok([{ metadata: { labels: { app: 'istiod' } }, spec: { containers: [{ image: 'docker.io/istio/pilot:1.30.4-distroless' }] } }]);
   const version = edge.istioVersionOf(pods);
   assert.strictEqual(version, '1.30.4');
   const rows = edge.envoyFilterRows(ok([
@@ -149,8 +152,8 @@ test('access control counts peers and never lists one', () => {
     resolvePeer: r => ({ ip: r.downstreamRemote.split(':')[0], kind: 'external' }),
     gatewayLabels: { istio: 'ingressgateway' },
     gatewayNamespace: 'istio-system',
-    authorizationPolicies: ok([{ metadata: { name: 'apple-acl', namespace: 'istio-system' }, spec: { action: 'ALLOW', selector: { matchLabels: { istio: 'ingressgateway' } }, rules: [{ from: [{ source: { remoteIpBlocks: ['198.51.100.0/24', '192.0.2.0/24'] } }] }] } }]),
-    peerAuthentications: ok([{ metadata: { name: 'x', namespace: 'kyma-system' }, spec: { mtls: { mode: 'PERMISSIVE' } } }]),
+    authorizationPolicies: ok([{ metadata: { name: 'edge-acl', namespace: 'istio-system' }, spec: { action: 'ALLOW', selector: { matchLabels: { istio: 'ingressgateway' } }, rules: [{ from: [{ source: { remoteIpBlocks: ['198.51.100.0/24', '192.0.2.0/24'] } }] }] } }]),
+    peerAuthentications: ok([{ metadata: { name: 'x', namespace: 'istio-system' }, spec: { mtls: { mode: 'PERMISSIVE' } } }]),
     envoyFilters: { unavailable: false, items: [{ proxyProtocol: true, workloadSelector: { istio: 'ingressgateway' } }] }
   });
   assert.deepEqual(out.peers, { distinct: 3, internal: 0, external: 3, externalAllowed: 1, externalBlockedOnly: 1, externalTlsOnly: 1 });
@@ -170,12 +173,18 @@ test('error groups get a bucket: refused, unrouted and failed are told apart', (
 
 // ------------------------------------------------------------------ network path
 
-test('shoot-info gives the provider, CIDRs and NAT addresses; unread is unavailable', () => {
-  const info = edge.shootInfoOf(ok([{ data: { provider: 'aws', region: 'us-east-1', nodeNetwork: '10.250.0.0/16', podNetwork: '100.96.0.0/11', serviceNetwork: '100.64.0.0/13', egressCIDRs: '34.200.180.67/32,54.209.206.118/32', domain: 'c.example.com' } }]));
-  assert.deepEqual(info.natIps, ['34.200.180.67', '54.209.206.118']);
-  assert.strictEqual(info.podCidr, '100.96.0.0/11');
-  assert.strictEqual(edge.shootInfoOf(gone('FORBIDDEN')).unavailable, true);
-  assert.strictEqual(edge.shootInfoOf(ok([])).reason, 'NOT_FOUND');
+test('the cluster facts come from the Nodes: provider from providerID, region from the topology label', () => {
+  const node = (name, providerID, region, zone) => ({ metadata: { name, labels: { 'topology.kubernetes.io/region': region, 'topology.kubernetes.io/zone': zone } }, spec: { providerID } });
+  const aws = edge.clusterFactsOf(ok([node('n1', 'aws:///us-east-1a/i-0abc', 'us-east-1', 'us-east-1a'), node('n2', 'aws:///us-east-1b/i-0def', 'us-east-1', 'us-east-1b')]));
+  assert.deepEqual(aws, { provider: 'aws', region: 'us-east-1', zones: ['us-east-1a', 'us-east-1b'], unavailable: false, reason: null });
+  assert.strictEqual(edge.clusterFactsOf(ok([node('n1', 'azure:///subscriptions/x/vm', 'eastus', 'eastus-1')])).provider, 'azure');
+  assert.strictEqual(edge.clusterFactsOf(ok([node('n1', 'gce://proj/us-central1-a/vm', 'us-central1', 'us-central1-a')])).provider, 'gce');
+  assert.strictEqual(edge.clusterFactsOf(ok([node('n1', 'kind://docker/kind/kind-control-plane', undefined, undefined)])).region, null, 'no label is unknown, never a guess');
+  assert.strictEqual(edge.clusterFactsOf(ok([{ metadata: { name: 'bare' }, spec: {} }])).provider, null);
+  const unread = edge.clusterFactsOf(gone('FORBIDDEN'));
+  assert.strictEqual(unread.unavailable, true);
+  assert.strictEqual(unread.provider, null);
+  assert.strictEqual(unread.reason, 'FORBIDDEN');
 });
 
 test('the mesh outbound policy is read, defaulting to ALLOW_ANY only when the mesh was read', () => {
@@ -203,14 +212,13 @@ function fakeCluster() {
   const app = { metadata: { name: 'shop-1', namespace: 'shop', labels: {} }, spec: { containers: [{ name: 'app' }, { name: 'istio-proxy' }], nodeName: 'n1' }, status: { phase: 'Running' } };
   const map = {
     '/api/v1/pods': [gw, app],
-    '/api/v1/nodes': [{ metadata: { name: 'n1', labels: { 'topology.kubernetes.io/zone': 'us-east-1a' } }, status: { addresses: [] } }],
+    '/api/v1/nodes': [{ metadata: { name: 'n1', labels: { 'topology.kubernetes.io/zone': 'us-east-1a', 'topology.kubernetes.io/region': 'us-east-1' } }, spec: { providerID: 'aws:///us-east-1a/i-0abc' }, status: { addresses: [] } }],
     '/api/v1/services': [{ metadata: { name: 'istio-ingressgateway', namespace: 'istio-system', annotations: { 'service.beta.kubernetes.io/aws-load-balancer-proxy-protocol': '*' } }, spec: { type: 'LoadBalancer', selector: { istio: 'ingressgateway' }, externalTrafficPolicy: 'Local', ports: [{ name: 'https', port: 443, targetPort: 8443, nodePort: 31430, protocol: 'TCP' }] }, status: { loadBalancer: { ingress: [{ ip: '192.0.2.10' }] } } }],
-    '/gateways': [{ metadata: { name: 'kyma-gateway', namespace: 'kyma-system' }, spec: { selector: { istio: 'ingressgateway' }, servers: [{ port: { number: 443, protocol: 'HTTPS', name: 'https' }, tls: { mode: 'SIMPLE', credentialName: 'kyma-tls' }, hosts: ['*.c.example.com'] }] } }],
-    '/apirules': [{ metadata: { name: 'shop', namespace: 'shop' }, spec: { hosts: ['shop.c.example.com'] } }],
-    'shoot-info': [{ data: { provider: 'aws', region: 'us-east-1', egressCIDRs: '34.200.180.67/32', podNetwork: '100.96.0.0/11' } }],
-    '/networkpolicies': [{ metadata: { name: 'egress', namespace: 'shop', annotations: { 'xsuaa-service-instances-us10': '18.213.242.208/32' } } }],
-    '/certificates': [cert('kyma-tls', { expires: '2099-01-01T00:00:00Z', renewal: '2098-12-01T00:00:00Z' })],
-    '/authorizationpolicies': [{ metadata: { name: 'apple-acl', namespace: 'istio-system' }, spec: { action: 'ALLOW', selector: { matchLabels: { istio: 'ingressgateway' } }, rules: [{ from: [{ source: { remoteIpBlocks: ['17.0.0.0/8'] } }] }] } }]
+    '/networking.istio.io/v1/gateways': [{ metadata: { name: 'public-gateway', namespace: 'istio-system' }, spec: { selector: { istio: 'ingressgateway' }, servers: [{ port: { number: 443, protocol: 'HTTPS', name: 'https' }, tls: { mode: 'SIMPLE', credentialName: 'public-tls' }, hosts: ['*.c.example.com'] }] } }],
+    '/ingresses': [{ metadata: { name: 'shop', namespace: 'shop' }, spec: { rules: [{ host: 'shop.c.example.com', http: { paths: [{ path: '/', pathType: 'Prefix', backend: { service: { name: 'srv', port: { number: 8080 } } } }] } }] } }],
+    '/networkpolicies': [{ metadata: { name: 'egress', namespace: 'shop', annotations: { 'idp-us10': '18.213.242.208/32' } } }],
+    '/certificates': [cert('public-tls', { expires: '2099-01-01T00:00:00Z', renewal: '2098-12-01T00:00:00Z' })],
+    '/authorizationpolicies': [{ metadata: { name: 'edge-acl', namespace: 'istio-system' }, spec: { action: 'ALLOW', selector: { matchLabels: { istio: 'ingressgateway' } }, rules: [{ from: [{ source: { remoteIpBlocks: ['17.0.0.0/8'] } }] }] } }]
   };
   return async ({ path }) => {
     for (const key of Object.keys(map)) if (path.includes(key)) return map[key];
@@ -258,14 +266,33 @@ test('the wire carries the classes, the path and named destinations', async () =
   const lb = ing.path.ingress.loadBalancers[0];
   assert.strictEqual(lb.proxyProtocol, true);
   assert.strictEqual(lb.externalTrafficPolicy, 'Local');
-  assert.deepEqual(ing.path.egress.natIps, ['34.200.180.67']);
+  assert.strictEqual(ing.path.cluster.provider, 'aws');
+  assert.strictEqual(ing.path.cluster.region, 'us-east-1');
+  assert.deepEqual(ing.path.cluster.zones, ['us-east-1a']);
+  assert.equal('natIps' in ing.path.egress, false, 'no generic object states the NAT addresses');
   assert.strictEqual(ing.path.egress.egressGateway, false);
-  assert.strictEqual(ing.path.egress.observed[0].display, 'SAP Authorization and Trust (XSUAA) · us10');
-  assert.ok(ing.path.egress.destinations.some(d => d.label === 'xsuaa-service-instances-us10'));
+  assert.strictEqual(ing.path.egress.observed[0].display, 'idp-us10');
+  assert.ok(ing.path.egress.destinations.some(d => d.label === 'idp-us10'));
   const bare = ing.hosts.find(h => h.host === '192.0.2.10');
   assert.strictEqual(bare.edgeClass, 'direct-ip');
   assert.strictEqual(bare.destination.source, 'ingress-lb');
-  assert.strictEqual(ing.hosts.find(h => h.host === 'shop.c.example.com').chain.servers[0].certificate.name, 'kyma-tls');
+  const shop = ing.hosts.find(h => h.host === 'shop.c.example.com');
+  assert.strictEqual(shop.chain.servers[0].certificate.name, 'public-tls');
+  assert.deepEqual(shop.servedBy.map(s => s.kind), ['Ingress']);
+  assert.deepEqual(ing.routesFrom, { virtualservices: 0, ingresses: 1, httproutes: 0 });
+});
+
+test('every edge read is a standard Kubernetes, Istio or cert-manager API: nothing vendor-specific', async () => {
+  const base = fakeCluster();
+  const paths = [];
+  const listFn = async args => { paths.push(args.path); return base(args); };
+  await collect({ cluster: { id: 'c1' }, token: 't', listFn, textFn: async () => line({}) });
+  for (const p of paths) {
+    assert.ok(!/gardener|kyma|apirules|shoot-info|dnsentries|cloud\.sap|telemetry\.kyma/.test(p), `vendor read: ${p}`);
+  }
+  assert.ok(paths.some(p => p.startsWith('/apis/cert-manager.io/v1/certificates')));
+  assert.ok(paths.some(p => p.startsWith('/apis/networking.k8s.io/v1/ingresses')));
+  assert.ok(paths.some(p => p.startsWith('/apis/gateway.networking.k8s.io/v1/httproutes')));
 });
 
 test('traffic-errors carries ingress.refused with counts, never addresses', async () => {
@@ -274,7 +301,7 @@ test('traffic-errors carries ingress.refused with counts, never addresses', asyn
   assert.ok(out.ingress.refused.rows.length >= 1, 'the gateway lines above are refusals');
   const denied = out.ingress.refused.rows.find(r => r.code === 403);
   assert.ok(denied, 'the ALLOW-miss line produced a row');
-  assert.equal(denied.decidedBy[0].name, 'apple-acl');
+  assert.equal(denied.decidedBy[0].name, 'edge-acl');
   for (const r of out.ingress.refused.rows) {
     assert.equal('peers' in r, false);
     assert.equal(typeof r.clients, 'number');
@@ -284,15 +311,16 @@ test('traffic-errors carries ingress.refused with counts, never addresses', asyn
 test('refused edge reads land in summary.unavailable', async () => {
   const base = fakeCluster();
   const listFn = async args => {
-    if (/certificates|dnsentries|authorizationpolicies|envoyfilters|shoot-info/.test(args.path)) throw Object.assign(new Error('forbidden'), { status: 403 });
+    if (/certificates|authorizationpolicies|envoyfilters|\/nodes/.test(args.path)) throw Object.assign(new Error('forbidden'), { status: 403 });
     return base(args);
   };
   const out = await collect({ cluster: { id: 'c1' }, token: 't', listFn, textFn: async () => line({}) });
-  for (const label of ['certificates', 'dnsentries', 'authorizationpolicies', 'envoyfilters', 'shoot-info']) {
+  for (const label of ['certificates', 'authorizationpolicies', 'envoyfilters', 'nodes']) {
     assert.ok(out.summary.unavailable.includes(label), `${label} missing from unavailable`);
   }
   assert.strictEqual(out.ingress.certificates.unavailable, true);
-  assert.strictEqual(out.ingress.path.egress.natIps, null, 'unread NAT addresses are unknown, not none');
+  assert.strictEqual(out.ingress.path.cluster.provider, null, 'unread Nodes leave the provider unknown, not a default');
+  assert.strictEqual(out.ingress.path.cluster.unavailable, true);
   assert.strictEqual(out.ingress.path.ingress.policies, null);
 });
 
@@ -308,42 +336,55 @@ test('a gateway failure group whose Host nothing admits is direct-ip, never App 
 test('with Gateways and routes both unread the app headline is unknown, not 0', async () => {
   const base = fakeCluster();
   const listFn = async args => {
-    if (/gateways|virtualservices|apirules/.test(args.path)) throw Object.assign(new Error('forbidden'), { status: 403 });
+    if (/gateways|virtualservices|ingresses|httproutes/.test(args.path)) throw Object.assign(new Error('forbidden'), { status: 403 });
     return base(args);
   };
   const out = await collect({ cluster: { id: 'c1' }, token: 't', listFn, textFn: async () => line({}) });
   assert.strictEqual(out.ingress.app, null);
-  const partial = await collect({ cluster: { id: 'c1' }, token: 't', listFn: async args => (/virtualservices|apirules/.test(args.path) ? Promise.reject(Object.assign(new Error('x'), { status: 403 })) : base(args)), textFn: async () => line({}) });
+  const partial = await collect({ cluster: { id: 'c1' }, token: 't', listFn: async args => (/virtualservices|ingresses|httproutes/.test(args.path) ? Promise.reject(Object.assign(new Error('x'), { status: 403 })) : base(args)), textFn: async () => line({}) });
   assert.notStrictEqual(partial.ingress.app, null, 'Gateways alone still admit hosts');
 });
 
 test('a host a Gateway admits but no route names is app traffic, not direct-ip (real index shape)', () => {
-  const r = rec({ authority: 'kyma-demo-1-approuter.c.example.com' });
+  const r = rec({ authority: 'demo-1-frontend.c.example.com' });
   assert.equal(edge.classifyEdgeRecord(r, { gatewayHosts: CTX.gatewayHosts, routes: [] }), 'app');
   assert.equal(edge.classifyEdgeRecord({ ...r, responseCodeDetails: 'rbac_access_denied_matched_policy[none]' }, { gatewayHosts: CTX.gatewayHosts, routes: [] }), 'policy-blocked');
   // Strings still work, for callers that pass patterns.
   assert.equal(edge.classifyEdgeRecord(r, { gatewayHosts: ['*.c.example.com'], routes: [] }), 'app');
 });
 
-test('a NAT range is a CIDR, never shown as one address', () => {
-  const info = edge.shootInfoOf(ok([{ metadata: { namespace: 'kube-system', name: 'shoot-info' }, data: { egressCIDRs: '34.200.180.67/32,1.2.3.0/28,5.6.7.8' } }]));
-  assert.deepEqual(info.natIps, ['34.200.180.67', '5.6.7.8']);
-  assert.deepEqual(info.natCidrs, ['1.2.3.0/28']);
+test('an Ingress or HTTPRoute host nothing reached is an idle host; a VirtualService host is not', () => {
+  const att = edge.attentionOf({
+    certificates: { items: [], unavailable: true },
+    app: { hosts: [] },
+    hosts: [{ host: 'busy.c.example.com' }],
+    routes: [
+      { host: 'idle.c.example.com', kind: 'Ingress', name: 'idle', namespace: 'shop' },
+      { host: 'quiet.c.example.com', kind: 'HTTPRoute', name: 'quiet', namespace: 'shop' },
+      { host: 'busy.c.example.com', kind: 'Ingress', name: 'busy', namespace: 'shop' },
+      { host: 'mesh.c.example.com', kind: 'VirtualService', name: 'mesh', namespace: 'shop' }
+    ],
+    access: { peerAuthentications: [] },
+    envoyFilters: { dead: 0 },
+    gatewayRows: []
+  });
+  const idle = att.filter(a => a.kind === 'idle-host');
+  assert.deepEqual(idle.map(a => a.ref).sort(), ['idle.c.example.com', 'quiet.c.example.com']);
+  assert.match(idle.find(a => a.ref === 'quiet.c.example.com').detail, /^Published by HTTPRoute shop\/quiet/);
 });
 
 test('a failed Certificate or Gateway read leaves the chain unknown, not a gap', () => {
-  const gatewayRows = [{ namespace: 'kyma-system', name: 'kyma-gateway', key: 'k', port: 443, tlsMode: 'SIMPLE', credentialName: 'kyma-gateway-certs', hosts: ['*.c.example.com'] }];
-  const dnsEntries = { items: [], unavailable: false };
-  const noCerts = edge.hostChain('shop.c.example.com', { gatewayRows, certificates: { items: [], unavailable: true }, dnsEntries });
+  const gatewayRows = [{ namespace: 'istio-system', name: 'public-gateway', key: 'k', port: 443, tlsMode: 'SIMPLE', credentialName: 'public-gateway-certs', hosts: ['*.c.example.com'] }];
+  const noCerts = edge.hostChain('shop.c.example.com', { gatewayRows, certificates: { items: [], unavailable: true } });
   assert.equal(noCerts.servers[0].certificate, undefined);
-  const missing = edge.hostChain('shop.c.example.com', { gatewayRows, certificates: { items: [], unavailable: false }, dnsEntries });
+  const missing = edge.hostChain('shop.c.example.com', { gatewayRows, certificates: { items: [], unavailable: false } });
   assert.equal(missing.servers[0].certificate, null);
-  const noGw = edge.hostChain('shop.c.example.com', { gatewayRows: [], certificates: { items: [], unavailable: false }, dnsEntries, gatewaysUnavailable: true });
+  const noGw = edge.hostChain('shop.c.example.com', { gatewayRows: [], certificates: { items: [], unavailable: false }, gatewaysUnavailable: true });
   assert.equal(noGw.servers, undefined);
 });
 
 test('network path: unread Gateways or routes are null, never 0; naming sources travel along', () => {
-  const base = { shootInfo: ok([]), services: ok([]), pods: ok([]), nodes: ok([]), dnsEntries: { items: [], unavailable: false }, envoyFilters: { istioVersion: null }, access: { proxyProtocol: null, policies: [], unavailable: {} }, gatewayRows: [], routes: [], meshConfig: null, serviceEntries: ok([]) };
+  const base = { services: ok([]), pods: ok([]), nodes: ok([]), envoyFilters: { istioVersion: null }, access: { proxyProtocol: null, policies: [], unavailable: {} }, gatewayRows: [], routes: [], meshConfig: null, serviceEntries: ok([]) };
   const p = edge.networkPath({ ...base, gatewaysUnavailable: true, routesUnavailable: true, destinationSources: { networkPolicies: 'unavailable' } });
   assert.equal(p.ingress.servers, null);
   assert.equal(p.ingress.tlsServers, null);

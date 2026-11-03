@@ -93,13 +93,13 @@ describe('matchesHostFilter', () => {
   test('search reaches the declaring object, not just the host', () => {
     const h = host({
       servedBy: [
-        { kind: 'APIRule', name: 'shop-rule', namespace: 'shop', evidence: 'publishes it', matched: 'shop.example.com' }
+        { kind: 'HTTPRoute', name: 'shop-rule', namespace: 'shop', evidence: 'publishes it', matched: 'shop.example.com' }
       ],
-      gateway: { name: 'kyma-gateway', namespace: 'kyma-system', host: '*.example.com', port: 443, evidence: 'server host' }
+      gateway: { name: 'main-gateway', namespace: 'platform-system', host: '*.example.com', port: 443, evidence: 'server host' }
     });
-    // An operator who knows the APIRule name and not the host is the whole reason for this.
+    // An operator who knows the route name and not the host is the whole reason for this.
     expect(matchesHostFilter(h, 'all', 'shop-rule')).toBe(true);
-    expect(matchesHostFilter(h, 'all', 'kyma-gateway')).toBe(true);
+    expect(matchesHostFilter(h, 'all', 'main-gateway')).toBe(true);
     expect(matchesHostFilter(h, 'all', 'nothing-like-this')).toBe(false);
   });
 
@@ -282,7 +282,7 @@ function ingress(over: Partial<TrafficIngress> = {}): TrafficIngress {
     tier: null,
     ingressProxiesSelected: 3,
     ingressProxiesUnread: [],
-    routesFrom: { virtualservices: 9, apirules: 4 },
+    routesFrom: { virtualservices: 9, ingresses: 4, httproutes: 2 },
     ...over
   };
 }
@@ -351,10 +351,10 @@ describe('the group vocabulary', () => {
   });
 
   test('no group label or explanation names a specific company or cluster domain', () => {
-    // The suffixes come from FLEET_CORPORATE_DOMAIN_SUFFIXES and the Kyma domain is per shoot. A
+    // The suffixes come from FLEET_CORPORATE_DOMAIN_SUFFIXES and the ingress domain is per cluster. A
     // literal here would ship green and be wrong on the next cluster onboarded.
     const prose = [...Object.values(GROUP_LABEL), ...Object.values(GROUP_WHY)].join(' ');
-    expect(prose).not.toMatch(/apple\.com/i);
+    expect(prose).not.toMatch(/\b[a-z0-9-]+\.(com|net|org|io)\b/i);
     expect(prose).not.toMatch(/c-[0-9a-f]{7}/i);
   });
 });

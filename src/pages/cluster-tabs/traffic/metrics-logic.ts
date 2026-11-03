@@ -29,7 +29,7 @@ type Summary = TrafficData['summary'];
  *
  * It would be the obvious source and it is the wrong one. `srv/fleet/collectors/traffic.js` fills
  * `summary.unavailable` from the ten **enrichment** reads — the Telemetry CR, the mesh ConfigMap,
- * Services, EndpointSlices, Nodes, Gateways, VirtualServices, APIRules, the HPA and the PDB. None of
+ * Services, EndpointSlices, Nodes, Gateways, VirtualServices, Ingresses, HTTPRoutes, the HPA and the PDB. None of
  * them contributes a single digit to `server`, `client`, `noResponse` or `groups`, which come purely
  * from parsed access-log lines. Folding that list into these four cards would mark a correct 5xx
  * count "unavailable" because an HPA read was refused, which trains the operator to ignore the

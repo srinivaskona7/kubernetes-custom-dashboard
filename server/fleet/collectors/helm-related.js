@@ -37,7 +37,7 @@ const { safeList, unavailableLabels, truncatedLabels } = safeListModule;
 import errorsModule from '../errors.js';
 const { ClusterError, NOT_FOUND } = errorsModule;
 import workloads from './workloads.js';
-import policy from './policy.js';
+import labelSelector from './label-selector.js';
 import helm from './helm.js';
 
 const HELM_SECRET_TYPE = 'helm.sh/release.v1';
@@ -487,12 +487,12 @@ async function related({ cluster, token, listFn = list, namespace, name }) {
       accept(k, 'runtime', 'empty podSelector — applies to every pod in this namespace, including this release’s');
       continue;
     }
-    const hitWorkload = acceptedWorkloads.find(w => policy.selectorMatches(templateLabels(w.obj), sel));
+    const hitWorkload = acceptedWorkloads.find(w => labelSelector.selectorMatches(templateLabels(w.obj), sel));
     if (hitWorkload) {
       accept(k, 'selector', `selector matches the pod template of ${hitWorkload.kind}/${hitWorkload.obj.metadata.name}`);
       continue;
     }
-    const hitPod = acceptedPods.find(p => policy.selectorMatches(labelsOf(p.obj), sel));
+    const hitPod = acceptedPods.find(p => labelSelector.selectorMatches(labelsOf(p.obj), sel));
     if (hitPod) accept(k, 'selector', `selector matches Pod/${hitPod.obj.metadata.name}`);
   }
 
@@ -935,7 +935,7 @@ function buildGraph({ release, resources, live, namespace }) {
     if (r.kind === 'PodDisruptionBudget' && f.selector) {
       for (const w of resources.filter(x => ['Deployment', 'StatefulSet', 'DaemonSet'].includes(x.kind))) {
         const obj = live.get(w.id);
-        if (obj && policy.selectorMatches(templateLabels(obj.obj), f.selector)) {
+        if (obj && labelSelector.selectorMatches(templateLabels(obj.obj), f.selector)) {
           add(r.id, w.id, 'selector', `spec.selector matches the pod template of ${w.kind}/${w.name}`,
             `This budget governs how many of ${w.name}'s pods may be evicted at once.`);
         }
@@ -946,7 +946,7 @@ function buildGraph({ release, resources, live, namespace }) {
       for (const w of resources.filter(x => ['Deployment', 'StatefulSet', 'DaemonSet'].includes(x.kind))) {
         const obj = live.get(w.id);
         if (!obj) continue;
-        if (empty || policy.selectorMatches(templateLabels(obj.obj), f.podSelector)) {
+        if (empty || labelSelector.selectorMatches(templateLabels(obj.obj), f.podSelector)) {
           add(r.id, w.id, 'selector', empty ? 'empty podSelector — every pod in the namespace' : `podSelector matches the pod template of ${w.kind}/${w.name}`,
             `This policy governs the traffic allowed to and from ${w.name}'s pods.`);
         }

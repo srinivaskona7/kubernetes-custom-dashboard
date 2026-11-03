@@ -2,7 +2,7 @@
  * Read-only rollout status.
  *
  * This file used to hold the console's only two cluster mutations — `RestartControl` (a rollout
- * restart) and `ScaleControl` (a `spec.replicas` patch). Both are gone. Kyma Fleet is a strictly
+ * restart) and `ScaleControl` (a `spec.replicas` patch). Both are gone. This dashboard is a strictly
  * read-only observability and investigation platform: it must never change cluster state, and a
  * confirm dialog is not an exemption from that, it is just a slower way to break the rule.
  *

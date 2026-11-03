@@ -77,7 +77,7 @@ describe('qualifierCaption', () => {
   });
 
   it('says what the figure is when nothing is in doubt', () => {
-    expect(qualifierCaption('exact', 0, 0)).toBe('per month, at list rate plus the Kyma management fee');
+    expect(qualifierCaption('exact', 0, 0)).toBe('per month, at list rate');
   });
 });
 

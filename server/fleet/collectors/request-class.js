@@ -6,7 +6,7 @@
  *                     admitted by no Gateway and no route
  *   security-refused  an AuthorizationPolicy refused it (`rbac_access_denied…`)
  *   probe             a `healthz.` host, or a liveness path (`POLL_RULES`) that succeeded, when `polls`
- *   platform          a Kyma system host prefix, or a route into a system namespace
+ *   platform          a route into a system namespace
  *   egress-declared   outbound to an external address the egress registry names
  *   egress-undeclared outbound to an external address no source names, the policies read
  *   egress-unverified the same with the NetworkPolicy list unread: unknown, never "undeclared"
@@ -21,7 +21,7 @@ const { nameOf } = destinationNamesModule;
 /**
  * Request paths that are a client or probe asking "are you alive", not work. One browser tab left
  * open on a Streamlit app answers `/_stcore/health` and `/_stcore/host-config` every few seconds;
- * measured on platformsbx they were two thirds of 3,000 lines and every kept slot, so the newest
+ * measured on a live cluster they were two thirds of 3,000 lines and every kept slot, so the newest
  * 200 journeys held no request anyone made on purpose.
  *
  * Path only: `user_agent` is dropped at parse time (it can identify a customer's device), so
@@ -46,9 +46,13 @@ function pollOf(path) {
   return rule ? rule[0] : null;
 }
 
-const SYSTEM_NAMESPACES = new Set(['kyma-system', 'istio-system', 'compass-system', 'kcp-system', 'kube-system']);
-/** Platform hosts a stock Kyma cluster serves for itself (tunnels, the application connector). */
-const PLATFORM_HOST_PREFIXES = ['cp.', 'healthcheck.cp.', 'gateway.', 'compass-', 'connectivity-'];
+/** Namespaces whose routes are the cluster's own plumbing, on any conformant cluster. */
+const SYSTEM_NAMESPACES = new Set(['kube-system', 'istio-system', 'cert-manager']);
+/**
+ * Host prefixes that make a request platform traffic by name alone. None by default: no host
+ * prefix means "platform" on every cluster, so only a route's namespace decides.
+ */
+const PLATFORM_HOST_PREFIXES = Object.freeze([]);
 /** Timeouts and upstream failures: the app, or the path to it, did not answer. */
 const APP_FAILURE_FLAGS = new Set(['UT', 'UF', 'URX', 'UH', 'NR']);
 /** Classes the Endpoints table leaves out by default: nobody's work, so nobody's latency. */
@@ -78,10 +82,9 @@ function admits(pattern, host) {
   return bare.startsWith('*.') && host.endsWith(bare.slice(1));
 }
 
-/** Route hosts in APIRule v2 may be short names the controller prefixes to the gateway domain. */
+/** A route host admitting `host`: an exact name or a one-label wildcard, as for a Gateway. */
 function routeAdmits(routeHost, host) {
-  if (admits(routeHost, host)) return true;
-  return !routeHost.includes('.') && !routeHost.includes('*') && host.startsWith(`${routeHost}.`);
+  return admits(routeHost, host);
 }
 
 const flagsOf = v => String(v || '').split(/[,\s]+/).filter(Boolean);
@@ -105,11 +108,10 @@ const probeFailed = r => failed(r) || Number(r.code) >= 400;
  * @param {object[]} [ctx.gatewayHosts] Gateway server host patterns
  * @param {'edge'|'inbound'|'outbound'} [ctx.direction] the Host rules apply at the edge only
  * @param {object} [ctx.upstream]     `{kind, ip}` of an outbound record's destination
- * @param {object} [ctx.caller]       `{namespace, name}` of the proxy that opened it (telemetry naming)
  * @param {boolean} [ctx.polls]       count liveness paths as probes (false keeps the Ingress rule)
  * @param {boolean} [ctx.hostsUnknown] the Gateways and every route source went unread, so no host can be judged unadmitted
  */
-function classify(r, { registry = null, routes = [], gatewayHosts = [], direction = 'edge', upstream = null, caller = null, polls = true, hostsUnknown = false } = {}) {
+function classify(r, { registry = null, routes = [], gatewayHosts = [], direction = 'edge', upstream = null, polls = true, hostsUnknown = false } = {}) {
   const details = String(r.responseCodeDetails || '');
   if (details.includes('filter_chain_not_found')) return 'direct-or-tls';
   const host = hostOf(r.authority);
@@ -128,7 +130,7 @@ function classify(r, { registry = null, routes = [], gatewayHosts = [], directio
   const specific = hitRoutes.filter(x => x.host !== '*').sort((a, b) => b.host.length - a.host.length)[0];
   if (specific && SYSTEM_NAMESPACES.has(specific.namespace)) return 'platform';
   if (direction === 'outbound' && upstream && upstream.kind === 'external' && upstream.ip) {
-    if (nameOf(registry, upstream.ip, { caller })) return 'egress-declared';
+    if (nameOf(registry, upstream.ip)) return 'egress-declared';
     return registry && registry.sources && registry.sources.networkPolicies === 'ok' ? 'egress-undeclared' : 'egress-unverified';
   }
   return 'app';
@@ -148,8 +150,7 @@ function classifyJourney(trace, ctx) {
   const cls = classify(first, {
     ...ctx,
     direction: directionOfHop(first),
-    upstream: first.to || null,
-    caller: first.observedBy ? { namespace: first.observedBy.namespace, name: first.observedBy.pod } : null
+    upstream: first.to || null
   });
   return { class: cls, appError: cls === 'app' && hops.some(failed) };
 }

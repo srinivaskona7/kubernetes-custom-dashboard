@@ -3,7 +3,7 @@
  *
  * Column width, order, visibility and row height are per-person preferences on a console somebody
  * keeps open all day: an SRE who widens `Pod` once should not have to widen it again after every
- * navigation, and the pod name column is the one every operator on a Kyma cluster widens, because a
+ * navigation, and the pod name column is the one every operator widens, because a
  * Deployment appends two hash segments to a name that was already long.
  *
  * `localStorage`, not the URL and not the server. The fleet API is read-only by design and has no

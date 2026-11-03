@@ -73,13 +73,13 @@ export type SsoOutcome =
  * survive every browser's cross-origin round trip through the identity provider, and a channel
  * needs no reference at all. Only an outcome word and a cluster id ever travel on it.
  */
-export const SSO_CHANNEL = 'kyma-fleet:sso';
+export const SSO_CHANNEL = 'k8s-fleet:sso';
 
 /**
  * A fixed window name, so clicking "Sign in" twice re-uses the one sign-in tab instead of
  * stacking up tabs that are all racing for the same single-use flow.
  */
-export const SSO_WINDOW = 'kyma-fleet-sso';
+export const SSO_WINDOW = 'k8s-fleet-sso';
 
 /**
  * True when this document is the tab we opened for the sign-in, rather than the console.

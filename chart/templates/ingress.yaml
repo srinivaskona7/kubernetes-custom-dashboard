@@ -1,24 +1,27 @@
 {{- if .Values.ingress.enabled -}}
-{{- $fullName := include "btp-kyma-fleet-dashboard.fullname" . -}}
+{{- $fullName := include "k8s-fleet-dashboard.fullname" . -}}
 {{- $svcPort := .Values.service.port -}}
+# Standard networking.k8s.io/v1 Ingress. Works with ingress-nginx, AWS Load
+# Balancer Controller, AKS Application Routing and GKE Ingress; the class name
+# and annotations are yours to set in values.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {{ $fullName }}
   namespace: {{ .Release.Namespace }}
   labels:
-    {{- include "btp-kyma-fleet-dashboard.labels" . | nindent 4 }}
+    {{- include "k8s-fleet-dashboard.labels" . | nindent 4 }}
   {{- with .Values.ingress.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
   {{- end }}
 spec:
-  {{- if .Values.ingress.className }}
-  ingressClassName: {{ .Values.ingress.className }}
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
   {{- end }}
-  {{- if .Values.ingress.tls }}
+  {{- with .Values.ingress.tls }}
   tls:
-    {{- range .Values.ingress.tls }}
+    {{- range . }}
     - hosts:
         {{- range .hosts }}
         - {{ . | quote }}

@@ -2,10 +2,10 @@ import 'dotenv/config';
 import express from 'express';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { loadWhisper } from './config.js';
+import { loadAppConfig } from './config.js';
 import { loadDb } from './db.js';
 import { createLogger } from './logger.js';
-import { shieldAuth } from './middleware/shieldAuth.js';
+import { oidcAuth } from './middleware/oidcAuth.js';
 import { mountFleet, assertAuthAllowed } from './fleet/mount.js';
 import statusRoutes from './routes/status.js';
 
@@ -15,12 +15,12 @@ const log = createLogger({ logLevel: process.env.LOG_LEVEL || 'info' });
 const db = await loadDb();
 
 const app = express();
-app.locals.whisper = await loadWhisper();
+app.locals.appConfig = await loadAppConfig();
 app.locals.db = db;
 
 const PORT = process.env.PORT || 3001;
 
-app.use(shieldAuth);
+app.use(oidcAuth);
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true });
@@ -38,8 +38,8 @@ try {
 // The fleet parses its own bodies (it allows a larger kubeconfig upload than the default
 // limit), so it is mounted ahead of any app-wide body parser.
 const apiRoutes = express.Router();
-mountFleet(apiRoutes, { db });
-apiRoutes.use('/api/status', statusRoutes({ whisper: app.locals.whisper }));
+const { registry } = mountFleet(apiRoutes, { db }) || {};
+apiRoutes.use('/api/status', statusRoutes({ registry }));
 
 app.use('/', apiRoutes);
 const basePath = process.env.BASE_PATH;
@@ -58,7 +58,7 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const server = app.listen(PORT, () => {
-  log.info({ port: PORT }, 'Btp Kyma Fleet Dashboard server started');
+  log.info({ port: PORT }, 'Kubernetes Fleet Dashboard server started');
 });
 
 // Registering a signal listener (the fleet renewer does) removes Node's default exit on

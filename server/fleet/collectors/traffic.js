@@ -20,7 +20,7 @@
  *     the CRs are read FIRST and their verdict is returned even when no log is read at all.
  *     An operator seeing zero errors must be able to tell "nothing is failing" from "nothing
  *     is being logged".
- *   - It only works when the log is **JSON**. Kyma's `stdout-json` provider emits one JSON
+ *   - It only works when the log is **JSON**. A JSON file provider (`stdout-json`, say) emits one JSON
  *     object per request; Envoy's default text format is positional and regexing it into
  *     structure produces plausible wrong attribution, which is worse than none. A non-JSON
  *     line is counted as `unparsed` and never guessed at.
@@ -49,7 +49,7 @@ const { refusalsOf } = refusalsModule;
 import podOwnerModule from './pod-owner.js';
 const { ownerOf } = podOwnerModule;
 import destinationNamesModule from '../destination-names.js';
-const { readNameSources, finishNameIndex, nameOf, namedDestinations, isTelemetryExporter, nameFailureGroups } = destinationNamesModule;
+const { readNameSources, finishNameIndex, nameOf, namedDestinations, nameFailureGroups } = destinationNamesModule;
 import safeListModule from './safe-list.js';
 const { safeList, requiredList, unavailableLabels, truncatedLabels } = safeListModule;
 
@@ -57,16 +57,11 @@ const TELEMETRY_GROUP = 'telemetry.istio.io';
 const NETWORKING_GROUP = 'networking.istio.io';
 const ISTIO_VERSION = 'v1';
 const DISCOVERY_GROUP = 'discovery.k8s.io';
-const APIGATEWAY_GROUP = 'gateway.kyma-project.io';
-/*
-  v2 only. `v1beta1` has been unreconciled since the Aug/Sep 2026 API Gateway release — the objects
-  are still served for compatibility and their status never advances, so reading v1beta1 would hand
-  back rules that look published and route nothing. A v1beta1 object converted in place answers on
-  v2 with `spec.host` instead of `spec.hosts`, which `buildRouteIndex` handles.
-*/
-const APIRULE_VERSION = 'v2';
+/** The two standard objects besides a VirtualService that publish an ingress host. */
+const INGRESS_PATH = '/apis/networking.k8s.io/v1/ingresses?limit=2000';
+const HTTPROUTE_PATH = '/apis/gateway.networking.k8s.io/v1/httproutes?limit=2000';
 
-/** The sidecar whose log this reads. Kyma injects it under exactly this name. */
+/** The sidecar whose log this reads. Istio injects it under exactly this name. */
 const PROXY_CONTAINER = 'istio-proxy';
 
 /**
@@ -186,17 +181,17 @@ function redactUrl(raw) {
  * A Telemetry CR names a provider; it does not say what that provider DOES.
  *
  * `spec.accessLogging[].providers[].name` is a reference into `meshConfig.extensionProviders`,
- * which lives in the `istio` ConfigMap. Two of the four providers Kyma ships are access-log
- * providers and they could not be more different in what they mean for this tab:
+ * which lives in the `istio` ConfigMap. Two common access-log providers could not be more
+ * different in what they mean for this tab:
  *
  *   stdout-json   envoyFileAccessLog, path /dev/stdout    -> the sidecar writes it, `pods/log`
  *                                                            reads it, this tab works
- *   kyma-logs     envoyOtelAls, telemetry-otlp-logs:4317  -> the sidecar streams it to the
+ *   otel-logs     envoyOtelAls, otel-collector:4317       -> the sidecar streams it to the
  *                                                            OTLP gateway and writes NOTHING
  *                                                            to stdout
  *
  * That difference is the whole reason this lookup exists. Before it, the verdict said `on` for
- * both and the tab tailed stdout either way — so a mesh switched to `kyma-logs` produced a
+ * both and the tab tailed stdout either way — so a mesh switched to `otel-logs` produced a
  * screen of confident zeros: "0 server errors", "No 4xx, 5xx or unanswered connection in the
  * window that was read". Nothing was failing to be read; there was simply nothing there, and
  * the tab could not tell the operator which of the two it was seeing. Same family as
@@ -234,8 +229,8 @@ const READABLE_LOG_PATHS = new Set(['/dev/stdout', '/dev/stderr']);
 /**
  * Which field vocabulary a file provider's JSON will use.
  *
- * Kyma's two log formats do not share a single key: `stdout-json` emits Envoy's own
- * `response_code`, while `kyma-logs` emits the OpenTelemetry semantic convention
+ * The two common log formats do not share a single key: `stdout-json` emits Envoy's own
+ * `response_code`, while an OTel provider emits the OpenTelemetry semantic convention
  * `http.response.status_code`. `logFormat.labels` is arbitrary, so an operator can put either
  * set behind either provider — which is why this is sniffed from the labels actually declared
  * rather than assumed from the provider's name.
@@ -467,7 +462,7 @@ function accessLogVerdict(telemetries, mesh = null, rootNamespace = 'istio-syste
       Two different reasons produce `readable: false`, and saying the wrong one is worse than
       saying nothing. A network sink (`envoyOtelAls`) means the requests ARE recorded, just not
       here — "query the destination" is good advice. A `not-access-log` provider (naming
-      `kyma-traces` under `accessLogging`, say) means nothing is recorded ANYWHERE and there is
+      `otel-traces` under `accessLogging`, say) means nothing is recorded ANYWHERE and there is
       no destination to query; `destination` is null, so the old wording pointed the operator at
       an em-dash and told them their requests were safe.
     */
@@ -484,7 +479,7 @@ function accessLogVerdict(telemetries, mesh = null, rootNamespace = 'istio-syste
   } else if (readable === null) {
     /*
       When the mesh ConfigMap itself could not be read, EVERY provider lands in
-      `unresolvedProviders` — but "kyma-logs is not declared in the mesh config" is then a claim
+      `unresolvedProviders` — but "otel-logs is not declared in the mesh config" is then a claim
       about a file nobody opened. The UI printed that sentence directly above its own "the mesh
       ConfigMap could not be read" note, contradicting itself on the one cluster shape where the
       operator most needs the explanation.
@@ -637,18 +632,19 @@ function gatewayHostsOf(gateways) {
  * completeness. Paths match the collectors' own reads, so the k8s list cache serves either.
  */
 async function readRegistry({ listFn, baseCtx }) {
-  const [services, gateways, virtualservices, apirules, nameReads] = await Promise.all([
+  const [services, gateways, virtualservices, ingresses, httproutes, nameReads] = await Promise.all([
     safeList(listFn, baseCtx, '/api/v1/services?limit=2000', 'services'),
     safeList(listFn, baseCtx, `/apis/${NETWORKING_GROUP}/${ISTIO_VERSION}/gateways`, 'istio-gateways'),
     safeList(listFn, baseCtx, `/apis/${NETWORKING_GROUP}/${ISTIO_VERSION}/virtualservices?limit=2000`, 'virtualservices'),
-    safeList(listFn, baseCtx, `/apis/${APIGATEWAY_GROUP}/${APIRULE_VERSION}/apirules?limit=2000`, 'apirules'),
+    safeList(listFn, baseCtx, INGRESS_PATH, 'ingresses'),
+    safeList(listFn, baseCtx, HTTPROUTE_PATH, 'httproutes'),
     readNameSources({ listFn, baseCtx, safeList, metadataAccept: METADATA_ONLY })
   ]);
   return {
     names: await finishNameIndex(nameReads, services),
-    routes: buildRouteIndex({ virtualservices, apirules }),
+    routes: buildRouteIndex({ virtualservices, ingresses, httproutes }),
     gatewayHosts: gatewayHostsOf(gateways),
-    reads: { services, gateways, virtualservices, apirules, nameReads }
+    reads: { services, gateways, virtualservices, ingresses, httproutes, nameReads }
   };
 }
 
@@ -695,7 +691,7 @@ function resolveAddress(index, raw) {
   };
 }
 
-/** RFC1918 + the CGNAT range Gardener shoots use for pods, plus IPv6 ULA. */
+/** RFC1918 + the CGNAT range some providers use for pods, plus IPv6 ULA. */
 function isPrivate(ip) {
   if (/^10\./.test(ip)) return true;
   if (/^192\.168\./.test(ip)) return true;
@@ -750,12 +746,11 @@ function matchGateway(index, authority) {
 /**
  * Which domains are "ours", derived from the cluster rather than written down.
  *
- * The temptation here is a literal — bucket `*.apple.com` as corporate, `*.kyma.ondemand.com` as
- * platform, done. It is wrong twice over. This console bakes in no cluster identity anywhere (see
- * `no-fixture-path.test.js`), and the Kyma domain is *per shoot*: the cluster this was built
- * against serves `*.c-9d0a141.kyma.ondemand.com`, so a literal `*.kyma.ondemand.com` matches every
- * Kyma cluster in the estate and is nobody's actual domain. Both literals would ship green and be
- * wrong on the next cluster onboarded.
+ * The temptation here is a literal — bucket `*.example.com` as corporate, a managed-cluster domain
+ * as platform, done. It is wrong twice over. This console bakes in no cluster identity anywhere
+ * (see `no-fixture-path.test.js`), and a managed provider's domain is usually *per cluster*: a
+ * literal for the provider's parent domain matches every cluster in the estate and is nobody's
+ * actual domain. Both literals would ship green and be wrong on the next cluster onboarded.
  *
  * So the buckets come from evidence:
  *
@@ -775,21 +770,19 @@ function matchGateway(index, authority) {
 /**
  * Hostname markers for cluster plumbing rather than a published service.
  *
- * A named, documented list — not a heuristic. Each entry is a host a stock Kyma cluster serves for
- * its own health checking or tunnelling, and the reason the distinction earns its place is volume:
+ * A named, documented list — not a heuristic. Each entry is a host a cluster commonly serves for
+ * its own health checking or observability, and the reason the distinction earns its place is volume:
  * on the live cluster 140 of 400 ingress lines were `healthz.`, so a headline "sampled requests"
  * that pools them is 35% probe traffic and an error share computed over them is meaningless.
  */
 const INFRA_HOST_PREFIXES = [
-  'healthz.',        // Kyma's own ingress liveness host
-  'healthcheck.',    // connectivity-proxy tunnel health
-  'cp.',             // connectivity-proxy tunnel
+  'healthz.',        // a common ingress liveness host
   'kiali.',
   'grafana.',
   'tracing.',
   'jaeger.'
 ];
-const INFRA_HOST_SUBSTRINGS = ['connectivity-proxy'];
+const INFRA_HOST_SUBSTRINGS = [];
 const INFRA_HOST_EXACT = new Set(['localhost', 'kubernetes.default.svc']);
 
 /** The bucket key for a record that carried no Host header at all. Printable on purpose. */
@@ -875,11 +868,10 @@ function classifyHost(host, { gatewayHosts = [], corporate = [] } = {}) {
 /**
  * Which object publishes a host — the answer to "who is supposed to be serving this?".
  *
- * Built from the two objects that declare an ingress host in Kyma: an Istio `VirtualService` and an
- * API Gateway `APIRule`. Kyma's API Gateway controller *writes* the VirtualService behind an
- * APIRule, so a host commonly resolves to both, and both are reported rather than one being
- * preferred — an operator debugging a 404 wants to know the APIRule exists AND that a
- * VirtualService was generated from it.
+ * Built from the three standard objects that declare an ingress host: an Istio `VirtualService`, a
+ * `networking.k8s.io/v1` Ingress and a Gateway API `HTTPRoute`. A host commonly resolves to more
+ * than one of them, and every one is reported rather than one being preferred — an operator
+ * debugging a 404 wants to know every object that claims the host.
  *
  * Read as objects, never as controller logs. A controller's log is free-form operator prose; its
  * objects are a contract, and `spec.hosts` is the field that names the host by declaration rather
@@ -908,58 +900,69 @@ function vsBackends(vs) {
   return out;
 }
 
-/** An APIRule v2's Service, and each rule's own override. */
-function apiRuleBackends(rule) {
-  const spec = rule.spec || {};
+/** An Ingress's default backend and every path's Service. A `resource` backend is not a Service. */
+function ingressBackends(ing) {
+  const spec = ing.spec || {};
   const out = [];
-  for (const s of [spec.service, ...(spec.rules || []).map(r => r && r.service)]) {
-    if (!s || !s.name) continue;
-    pushRef(out, { name: String(s.name).toLowerCase(), namespace: s.namespace || rule.metadata.namespace });
+  const backends = [spec.defaultBackend, ...(spec.rules || []).flatMap(r => ((r && r.http && r.http.paths) || []).map(p => p && p.backend))];
+  for (const b of backends) {
+    const svc = b && b.service;
+    if (svc && svc.name) pushRef(out, { name: String(svc.name).toLowerCase(), namespace: ing.metadata.namespace });
   }
   return out;
 }
 
-function buildRouteIndex({ virtualservices, apirules }) {
+/** An HTTPRoute's Service backendRefs. `kind` defaults to Service; any other kind is not one. */
+function httpRouteBackends(route) {
+  const out = [];
+  for (const rule of (route.spec && route.spec.rules) || []) {
+    for (const ref of (rule && rule.backendRefs) || []) {
+      if (!ref || !ref.name || (ref.kind && ref.kind !== 'Service') || (ref.group && ref.group !== '')) continue;
+      pushRef(out, { name: String(ref.name).toLowerCase(), namespace: ref.namespace || route.metadata.namespace });
+    }
+  }
+  return out;
+}
+
+/** One route entry per declared host of one object. */
+function pushHosts(entries, obj, kind, hosts, field, backends) {
+  for (const host of hosts) {
+    const h = clean(host);
+    if (!h) continue;
+    entries.push({
+      host: h.toLowerCase(),
+      kind,
+      name: obj.metadata.name,
+      namespace: obj.metadata.namespace,
+      evidence: `${kind} ${obj.metadata.namespace}/${obj.metadata.name} lists ${h} in ${field}`,
+      backends
+    });
+  }
+}
+
+function buildRouteIndex({ virtualservices, ingresses, httproutes }) {
   const entries = [];
 
   if (virtualservices && !virtualservices.unavailable) {
     for (const vs of virtualservices.items || []) {
       if (!vs || !vs.metadata) continue;
-      const backends = vsBackends(vs);
-      for (const host of (vs.spec && vs.spec.hosts) || []) {
-        const h = clean(host);
-        if (!h) continue;
-        entries.push({
-          host: h.toLowerCase(),
-          kind: 'VirtualService',
-          name: vs.metadata.name,
-          namespace: vs.metadata.namespace,
-          evidence: `VirtualService ${vs.metadata.namespace}/${vs.metadata.name} lists ${h} in spec.hosts`,
-          backends
-        });
-      }
+      pushHosts(entries, vs, 'VirtualService', (vs.spec && vs.spec.hosts) || [], 'spec.hosts', vsBackends(vs));
     }
   }
 
-  if (apirules && !apirules.unavailable) {
-    for (const rule of apirules.items || []) {
-      if (!rule || !rule.metadata) continue;
-      const spec = rule.spec || {};
-      // v2 carries `spec.hosts`; a v1beta1 object converted in place still answers on `spec.host`.
-      const hosts = Array.isArray(spec.hosts) ? spec.hosts : spec.host ? [spec.host] : [];
-      const backends = apiRuleBackends(rule);
-      for (const host of hosts) {
-        const h = clean(host);
-        if (!h) continue;
-        entries.push({
-          host: h.toLowerCase(),
-          kind: 'APIRule',
-          name: rule.metadata.name,
-          namespace: rule.metadata.namespace,
-          evidence: `APIRule ${rule.metadata.namespace}/${rule.metadata.name} publishes ${h}`,
-          backends
-        });
-      }
+  if (ingresses && !ingresses.unavailable) {
+    for (const ing of ingresses.items || []) {
+      if (!ing || !ing.metadata) continue;
+      // A rule with no host is the catch-all on the default backend: it declares no host.
+      const hosts = ((ing.spec && ing.spec.rules) || []).map(r => r && r.host).filter(Boolean);
+      pushHosts(entries, ing, 'Ingress', [...new Set(hosts)], 'spec.rules[].host', ingressBackends(ing));
+    }
+  }
+
+  if (httproutes && !httproutes.unavailable) {
+    for (const route of httproutes.items || []) {
+      if (!route || !route.metadata) continue;
+      pushHosts(entries, route, 'HTTPRoute', (route.spec && route.spec.hostnames) || [], 'spec.hostnames', httpRouteBackends(route));
     }
   }
 
@@ -1007,7 +1010,7 @@ function matchRoutes(routes, host, limit = 4) {
  * Every `%RESPONSE_FLAGS%` code Envoy emits, in an operator's words.
  *
  * The tab shipped with six of these in one tooltip, and six is the wrong number in a specific way:
- * the flag an operator most often meets on a Kyma ingress is `NR`, and the four-code version
+ * the flag an operator most often meets on an Istio ingress is `NR`, and the four-code version
  * decoded it as "no route matched — check the VirtualService". On the live cluster every one of the
  * 114 `NR` lines was `response_code: 0` with `response_code_details: filter_chain_not_found`, which
  * is the **TCP** half of `NR`: no listener accepted the connection, so nothing was routed because
@@ -1022,7 +1025,7 @@ const RESPONSE_FLAGS = Object.assign(Object.create(null), {
   UH: { name: 'NoHealthyUpstream', meaning: 'No healthy host was left in the upstream cluster, so Envoy answered 503 itself. The upstream pods are failing their health checks, or there are none.' },
   UF: { name: 'UpstreamConnectionFailure', meaning: 'Envoy could not open a connection to the upstream and answered 503 itself. The request never reached the workload.' },
   UO: { name: 'UpstreamOverflow', meaning: 'A circuit breaker was open, so the request was shed with 503 before it was sent.' },
-  NR: { name: 'NoRouteFound', meaning: 'No route matched the request — check the VirtualService or APIRule host and path.' },
+  NR: { name: 'NoRouteFound', meaning: 'No route matched the request — check the VirtualService, Ingress or HTTPRoute host and path.' },
   URX: { name: 'UpstreamRetryLimitExceeded', meaning: 'The retry limit (HTTP) or the maximum connect attempts (TCP) was reached.' },
   NC: { name: 'NoClusterFound', meaning: 'The route named an upstream cluster that does not exist in this proxy’s configuration.' },
   DT: { name: 'DurationTimeout', meaning: 'The request or connection outlived its configured maximum duration.' },
@@ -1061,7 +1064,7 @@ const NR_FILTER_CHAIN = {
 /*
   Envoy puts more than one verdict on a single request, and it joins them with a COMMA:
   `UF,URX` means "could not connect to the upstream, and gave up after retrying". Measured on
-  platformsbx, 38 of 7,388 access-log lines carried exactly that pair, and no observed value
+  a live cluster, 38 of 7,388 access-log lines carried exactly that pair, and no observed value
   contained whitespace.
 
   Splitting on whitespace alone therefore does not fail loudly — it invents a flag literally named
@@ -1110,17 +1113,17 @@ function decodeResponseFlag(flag, details = []) {
  * also writes its own startup and xDS chatter to the same stream, and a proxy configured with
  * the default text format writes positional lines this deliberately refuses to guess at.
  *
- * ## Two vocabularies, because Kyma ships two log formats
+ * ## Two vocabularies, because meshes ship two log formats
  *
  * `stdout-json` labels a request the way Envoy always has — `response_code`, `method`, `path`.
- * `kyma-logs` labels the same request with OpenTelemetry semantic conventions —
+ * An OTel provider labels the same request with OpenTelemetry semantic conventions —
  * `http.response.status_code`, `http.request.method`, `url.path`. The label map on either
  * provider is free-form, so an operator migrating from one to the other can perfectly well
  * point a stdout provider at the OTel names; when they do, every line used to fall through to
  * `null` and land in `linesUnparsed`, and the tab reported zero errors out of a full window.
  *
- * So each field is looked up under both names, Envoy's first because it is what the default
- * Kyma mesh emits. Fields with no OTel counterpart — `response_flags`, `response_code_details`,
+ * So each field is looked up under both names, Envoy's first because it is what a default
+ * Istio mesh emits. Fields with no OTel counterpart — `response_flags`, `response_code_details`,
  * `upstream_cluster` — simply stay null under the OTel vocabulary rather than being
  * reconstructed from something that merely looks similar; a null upstream renders as "not
  * routed", which is true, while a guessed one would put a real workload's name on the wrong
@@ -1194,8 +1197,8 @@ function parseAccessLine(line) {
 
   const termination = clean(d.connection_termination_details);
   /*
-    Kyma's stock mesh maps `upstream_transport_failure_reason` to `%CONNECTION_TERMINATION_DETAILS%`
-    — verified live against the `istio` ConfigMap — so on that mesh the two labels carry the
+    A mesh can map `upstream_transport_failure_reason` to `%CONNECTION_TERMINATION_DETAILS%`
+    — seen live in an `istio` ConfigMap — so on that mesh the two labels carry the
     identical string and the real transport-failure reason is never emitted at all. Reporting it
     twice put the same words under a heading that promises something else ("the connection to the
     upstream itself failed"), so a value equal to the termination details is dropped rather than
@@ -1232,7 +1235,7 @@ function parseAccessLine(line) {
       The three correlation headers, RAW and unvalidated — `traces.js` owns the parsing.
 
       All three are *request header* values, so they are present only when the mesh's access-log
-      format asks for them: Kyma's stock `stdout-json` emits `request_id` and does NOT emit
+      format asks for them: a typical `stdout-json` format emits `request_id` and does NOT emit
       `traceparent`. An absent field here therefore means "this log format does not carry it",
       which is a different statement from "the request had no trace", and only the caller that
       knows which correlators it looked for can tell them apart. So they are surfaced as-is and
@@ -1274,7 +1277,7 @@ function classOf(code) {
  * Both a label match and a name match, because either alone is wrong somewhere. The label
  * `app: istio-ingressgateway` is what Istio's own chart sets and is the authoritative signal, but a
  * cluster running a second gateway Deployment (a mesh with an internal and an external gateway, or
- * a Kyma cluster with `apple-gateway-mtls` alongside `kyma-gateway`) names it something else and
+ * a cluster with `partner-gateway-mtls` alongside `public-gateway`) names it something else and
  * still labels it `istio: ingressgateway`. The name pattern catches the rest. A false positive
  * costs one extra pod in an ingress-scoped view; a false negative empties the whole screen.
  */
@@ -1290,7 +1293,7 @@ function isIngressProxy(pod) {
  *
  * Tiers, in order: ingress gateways, the only proxy that sees north-south traffic, so a 502 a
  * user reported is there and nowhere else; pods backing a route (`backends`, the selectors of the
- * Services a VirtualService or APIRule sends to), so the apps the edge serves are sampled; other
+ * Services a VirtualService, Ingress or HTTPRoute sends to), so the apps the edge serves are sampled; other
  * gateway-named pods; then the rest. Inside a tier, one pod per owning workload before any
  * workload gets a second, so four replicas of one chatty Deployment cannot fill the budget; then
  * restarts; then name, so the choice is deterministic — an operator comparing two reads should
@@ -1300,7 +1303,7 @@ function selectProxies(pods, { namespace, namespaces, keepIngress = false, maxPo
   const candidates = pods.filter(p => {
     // Both lists, because Istio's **native sidecar** mode injects `istio-proxy` as an init
     // container with `restartPolicy: Always`. Checking `spec.containers` alone found 3 proxies
-    // on a cluster running 38 — measured on platformsbx, where 35 pods are native-sidecar and
+    // on a cluster running 38 — measured on a live cluster, where 35 pods are native-sidecar and
     // every one of them was invisible to this tab. `mesh.js` carries the same canary.
     const containers = [...((p.spec && p.spec.containers) || []), ...((p.spec && p.spec.initContainers) || [])];
     if (!containers.some(c => c.name === PROXY_CONTAINER)) return false;
@@ -1505,7 +1508,7 @@ function latencyOf(durations) {
 /**
  * Whether a parsed access-log record describes an HTTP request at all.
  *
- * Envoy writes two kinds of access-log line and Kyma's `stdout-json` provider emits both onto the
+ * Envoy writes two kinds of access-log line and a JSON file provider emits both onto the
  * same stream. The HTTP log always carries `:method`. The **TCP** log — every database
  * connection, every non-HTTP upstream, every long-lived stream — carries no method, no authority
  * and no path, and its `duration` is the **lifetime of the connection**, not the latency of a
@@ -2564,7 +2567,6 @@ function edgeBlocks({ scoped, index, routes, gatewayRows, hosts, config }) {
      one would class direct-ip and the app headline would read a confident 0. */
   const app = config.gatewaysUnavailable && config.routesUnavailable ? null : edgeRead.app;
   const certificates = edge.certificateRows(config.certificates, gatewayRows, config.now);
-  const dnsEntries = edge.dnsEntryRows(config.dnsentries);
   const envoyFilters = edge.envoyFilterRows(config.envoyfilters, edge.istioVersionOf(config.pods));
   const access = edge.accessControl({
     records: scoped,
@@ -2586,7 +2588,7 @@ function edgeBlocks({ scoped, index, routes, gatewayRows, hosts, config }) {
   }
   for (const row of hosts.rows) {
     row.edgeClass = edge.hostClass(byHost.get(row.key) || [], classOf);
-    row.chain = edge.hostChain(row.host, { gatewayRows, certificates, dnsEntries, gatewaysUnavailable: Boolean(config.gatewaysUnavailable) });
+    row.chain = edge.hostChain(row.host, { gatewayRows, certificates, gatewaysUnavailable: Boolean(config.gatewaysUnavailable) });
     if (row.host && isBareAddress(row.host)) {
       const n = nameOf(config.nameIndex, row.host, { ranges: false });
       if (n) row.destination = n;
@@ -2598,17 +2600,14 @@ function edgeBlocks({ scoped, index, routes, gatewayRows, hosts, config }) {
     classes,
     app,
     certificates,
-    dnsEntries,
     access,
     envoyFilters,
     // A failed Services read is unknown, not "no load balancer": null takes the UI's read-gap branch.
     lb: config.nameIndex && !(config.services && config.services.unavailable) ? config.nameIndex.lb : null,
     path: edge.networkPath({
-      shootInfo: config.shootInfo,
       services: config.services,
       pods: config.pods,
       nodes: config.nodes,
-      dnsEntries,
       envoyFilters,
       access,
       gatewayRows,
@@ -2750,7 +2749,7 @@ const fullBody = body => Buffer.byteLength(body, 'utf8') >= LOG_LIMIT_BYTES;
  * Pod logs come back uncompressed (gzip is ignored on the log subresource), so on a slow link the
  * cost of a read is its bytes. A tail a little over the ceiling used to be re-read almost whole:
  * the approuter sidecar's 500 lines weighed ~540 KB, and the refit fetched 460 KB it largely held
- * already, 12 s on the Ingress tab's critical path (platformsbx, 2026-09-28). Instead, read the
+ * already, 12 s on the Ingress tab's critical path (measured on a live cluster). Instead, read the
  * newest `missing + GAP_MARGIN_LINES` lines and join them where the capped body's last complete
  * lines reappear. The margin absorbs lines written between the two reads.
  *
@@ -2791,7 +2790,7 @@ async function closeGap(read, raw, wanted) {
  * The kubelet applies `limitBytes` from the START of the tail, not the end: a gateway whose
  * 1000 lines weigh 1.1 MB came back as its oldest 459, half an hour behind the sidecars
  * read beside it, so no request id matched across the two and every gateway→approuter call
- * read as "External clients" (measured on platformsbx, 2026-09-25). When a body reaches the
+ * read as "External clients" (measured on a live cluster). When a body reaches the
  * ceiling, first try to close the small gap (closeGap); failing that, re-read with the tail the
  * ceiling holds, so the window always ends at "now".
  *
@@ -2827,7 +2826,7 @@ async function fetchCappedTail(read, wanted) {
  * The two label selectors that find every proxy without the cluster-wide pod list.
  *
  * Istio's injector labels every pod it gives a sidecar `security.istio.io/tlsMode` (classic and
- * native sidecars alike), and every gateway and istiod carries `istio`. On platformsbx the two
+ * native sidecars alike), and every gateway and istiod carries `istio`. On a live cluster the two
  * cover all 41 `istio-proxy` pods in 0.9 MB, against 1.8 MB for all 120 pods (2026-09-26).
  */
 const PROXY_DISCOVERY_PATHS = [
@@ -2852,7 +2851,7 @@ async function discoverProxyPods(listFn, baseCtx) {
 /**
  * Tail the proxies without waiting for the cluster-wide pod list.
  *
- * The full pod list stays: it names every pod IP the access log mentions, and 14 of platformsbx's
+ * The full pod list stays: it names every pod IP the access log mentions, and 14 of a live cluster's
  * 120 pods sit behind no Service and run no sidecar, so nothing else names them. But it is the
  * slowest list either route makes (2.6s alone, 6-10s beside the other reads), and the log reads
  * used to queue behind it. Now:
@@ -2876,7 +2875,7 @@ async function discoverProxyPods(listFn, baseCtx) {
 async function readProxiesEarly({ podsRead, discovery, skipReads, select, read, backends = Promise.resolve(null) }) {
   const keyOf = p => `${p.metadata.namespace}/${p.metadata.name}`;
   // The guess is known as soon as discovery lands, long before its tails do; the late reads start
-  // from it, so they never queue behind the slowest early tail (a 10s gateway log on platformsbx
+  // from it, so they never queue behind the slowest early tail (a 10s gateway log on a live cluster
   // made a cold /traces 17s where the slower of the two waves was 11s, 2026-09-27).
   const guessed = (async () => {
     const [found, skip] = await Promise.all([discovery, skipReads]);
@@ -2972,16 +2971,15 @@ async function collect({
     gateways,
     meshConfig,
     virtualservices,
-    apirules,
+    ingresses,
+    httproutes,
     hpas,
     pdbs,
     certificates,
-    dnsentries,
     authorizationpolicies,
     peerauthentications,
     envoyfilters,
     serviceentries,
-    shootInfo,
     registry,
     proxyRead
   ] = await Promise.all([
@@ -2992,16 +2990,17 @@ async function collect({
     safeList(listFn, baseCtx, '/api/v1/nodes', 'nodes'),
     safeList(listFn, baseCtx, `/apis/${NETWORKING_GROUP}/${ISTIO_VERSION}/gateways`, 'istio-gateways'),
     meshConfigRead,
-    // The two objects that declare an ingress host. Both feed `buildRouteIndex`, which answers
+    // The three objects that declare an ingress host. All feed `buildRouteIndex`, which answers
     // "who is supposed to be serving this host" on every row of the Hosts table.
     safeList(listFn, baseCtx, `/apis/${NETWORKING_GROUP}/${ISTIO_VERSION}/virtualservices?limit=2000`, 'virtualservices'),
-    safeList(listFn, baseCtx, `/apis/${APIGATEWAY_GROUP}/${APIRULE_VERSION}/apirules?limit=2000`, 'apirules'),
+    safeList(listFn, baseCtx, INGRESS_PATH, 'ingresses'),
+    safeList(listFn, baseCtx, HTTPROUTE_PATH, 'httproutes'),
     /*
       Cluster-wide, not `istio-system`-scoped. Scoping to the Istio namespace would be a smaller
       read and would introduce a blind spot the screen could not report: a cluster running a second
       gateway deployment in its own namespace would show gateway pods with no autoscaler and no
       disruption budget, which reads as "none configured" rather than "not looked for". Both Kinds
-      hold a handful of tiny objects per cluster and `autoscaling.js`/`policy.js` already read them
+      hold a handful of tiny objects per cluster and `autoscaling.js`/`reliability.js` already read them
       cluster-wide, so the honest read is also the cheap one.
     */
     safeList(listFn, baseCtx, '/apis/autoscaling/v2/horizontalpodautoscalers?limit=500', 'ingress-hpa'),
@@ -3010,14 +3009,11 @@ async function collect({
       The config the edge is built from. Each is a handful of small objects per cluster, read once
       per /traffic-errors fill (the k8s list cache and the 15s route cache sit in front of it).
     */
-    safeList(listFn, baseCtx, '/apis/cert.gardener.cloud/v1alpha1/certificates?limit=500', 'certificates'),
-    safeList(listFn, baseCtx, '/apis/dns.gardener.cloud/v1alpha1/dnsentries?limit=500', 'dnsentries'),
+    safeList(listFn, baseCtx, '/apis/cert-manager.io/v1/certificates?limit=500', 'certificates'),
     safeList(listFn, baseCtx, '/apis/security.istio.io/v1/authorizationpolicies?limit=500', 'authorizationpolicies'),
     safeList(listFn, baseCtx, '/apis/security.istio.io/v1/peerauthentications?limit=500', 'peerauthentications'),
     safeList(listFn, baseCtx, `/apis/${NETWORKING_GROUP}/v1alpha3/envoyfilters?limit=500`, 'envoyfilters'),
     safeList(listFn, baseCtx, `/apis/${NETWORKING_GROUP}/${ISTIO_VERSION}/serviceentries?limit=500`, 'serviceentries'),
-    // Gardener's facts about the shoot: provider, region, CIDRs, and the NAT addresses egress leaves by.
-    safeList(listFn, baseCtx, '/api/v1/namespaces/kube-system/configmaps?fieldSelector=metadata.name%3Dshoot-info', 'shoot-info'),
     registryRead,
     proxyReads
   ]);
@@ -3027,7 +3023,8 @@ async function collect({
   const mesh = meshProviders(meshConfig);
   const accessLog = accessLogVerdict(telemetries, mesh);
   const index = buildIndex({ pods, services, endpointslices, nodes, gateways });
-  const routes = buildRouteIndex({ virtualservices, apirules });
+  const routes = buildRouteIndex({ virtualservices, ingresses, httproutes });
+  const routeReads = [virtualservices, ingresses, httproutes];
   const corporate = corporateSuffixes(process.env.FLEET_CORPORATE_DOMAIN_SUFFIXES);
 
   const { selected, skipped, candidates } = proxyRead.selection;
@@ -3142,16 +3139,15 @@ async function collect({
         gateways,
         meshConfig,
         virtualservices,
-        apirules,
+        ingresses,
+        httproutes,
         hpas,
         pdbs,
         certificates,
-        dnsentries,
         authorizationpolicies,
         peerauthentications,
         envoyfilters,
         serviceentries,
-        shootInfo,
         ...nameReads
       ]),
       truncated: truncatedLabels([
@@ -3161,11 +3157,11 @@ async function collect({
         nodes,
         gateways,
         virtualservices,
-        apirules,
+        ingresses,
+        httproutes,
         hpas,
         pdbs,
         certificates,
-        dnsentries,
         authorizationpolicies,
         peerauthentications,
         envoyfilters,
@@ -3190,20 +3186,18 @@ async function collect({
         tier: ingressTier({ pods, services, hpas, pdbs }),
         config: {
           certificates,
-          dnsentries,
           authorizationpolicies,
           peerauthentications,
           envoyfilters,
           serviceentries,
-          shootInfo,
           services,
           pods,
           nodes,
           meshConfig,
           nameIndex,
           gatewaysUnavailable: Boolean(gateways && gateways.unavailable),
-          routesUnavailable: Boolean(virtualservices.unavailable || apirules.unavailable),
-          observed: edge.observedEgress(requests, { ingressKeys, isPrivate, splitHostPort, nameOf, isTelemetryExporter, nameIndex })
+          routesUnavailable: routeReads.some(r => r.unavailable),
+          observed: edge.observedEgress(requests, { ingressKeys, isPrivate, splitHostPort, nameOf, nameIndex })
         }
       }),
       ingressProxiesSelected: ingressSelected.length,
@@ -3216,10 +3210,11 @@ async function collect({
         authorizationPolicies: authorizationpolicies,
         classOf: r => edge.classifyEdgeRecord(r, { gatewayHosts: index.gatewayHosts || [], routes })
       }),
-      /** Which declaring objects were readable. A missing APIRule read is why a host says "not declared". */
+      /** Which declaring objects were readable. A missing Ingress read is why a host says "not declared". */
       routesFrom: {
         virtualservices: virtualservices.unavailable ? null : (virtualservices.items || []).length,
-        apirules: apirules.unavailable ? null : (apirules.items || []).length
+        ingresses: ingresses.unavailable ? null : (ingresses.items || []).length,
+        httproutes: httproutes.unavailable ? null : (httproutes.items || []).length
       }
     },
     collectedAt: windowReadAt(reads)

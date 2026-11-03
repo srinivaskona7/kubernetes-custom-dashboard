@@ -116,7 +116,7 @@ function validate(raw, index) {
     apiUrl: raw.apiUrl.replace(/\/+$/, ''),
     caFile: raw.caFile || null,
     caData: raw.caData || null,
-    namespace: raw.namespace || 'kyma-fleet',
+    namespace: raw.namespace || 'fleet-dashboard',
     serviceAccount: raw.serviceAccount || 'fleet-reader',
     enabled: raw.enabled !== false,
     source: raw.source || 'baked',

@@ -264,7 +264,7 @@ test('Path view fits the 810px pane at 1100: no fixed width above 780px', () => 
   assert.match(view, /min-w-0/, 'label cells can shrink');
 });
 
-test('every external/BTP TCP timing carries the one connection-duration tooltip constant', () => {
+test('every external TCP timing carries the one connection-duration tooltip constant', () => {
   for (const f of ['JourneyPath.tsx', 'TracesOutbound.tsx']) {
     assert.match(read(f), /CONNECTION_DURATION_TIP/, `${f} does not reference CONNECTION_DURATION_TIP`);
   }

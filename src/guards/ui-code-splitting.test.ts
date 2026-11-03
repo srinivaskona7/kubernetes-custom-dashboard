@@ -40,7 +40,6 @@ const LAZY_TABS = [
   'CostTab',
   'HelmTab',
   'LogsTab',
-  'ModulesIntegrityTab',
   'NetworkOperationsTab',
   'SecurityTab',
   'StorageTab',

@@ -122,7 +122,7 @@ test('the TokenRequest carries no audiences — a scoped token is rejected as a 
  * The read-only invariant, asserted against what onboarding actually PUTs on the cluster
  * rather than against the shape of `readOnlyRules()`.
  *
- * These replace two tests that checked the removed `kyma-fleet-rollout` grant behaved itself.
+ * These replace two tests that checked the removed `fleet-dashboard-rollout` grant behaved itself.
  * That grant is gone: nothing consumed it after the restart/scale routes were deleted, and
  * `allowRollout` was a field on the public onboarding body, so a curl could provision `patch`
  * on every workload in a cluster for a feature that no longer existed. The tests it needed are
@@ -169,7 +169,7 @@ test('an onboarding request cannot ask for extra permission', async () => {
   assert.equal(roles.length, 1, 'exactly one ClusterRole, whatever the request asked for');
   assert.equal(roles[0].body.metadata.name, onboard.CLUSTER_ROLE);
   assert.deepEqual(roles[0].body.rules, onboard.readOnlyRules());
-  assert.ok(!api.calls.some(c => JSON.stringify(c.body || {}).includes('kyma-fleet-rollout')));
+  assert.ok(!api.calls.some(c => JSON.stringify(c.body || {}).includes('fleet-dashboard-rollout')));
 });
 
 test('a second onboard of the same cluster repairs the objects instead of failing', async () => {
@@ -207,7 +207,7 @@ test('a 403 during RBAC creation is not swallowed as "already exists"', async ()
 });
 
 test('a TokenRequest that returns no token is an error, not a silent empty credential', async () => {
-  const api = fakeApi({ 'POST /api/v1/namespaces/kyma-fleet/serviceaccounts/fleet-reader/token': { status: {} } });
+  const api = fakeApi({ 'POST /api/v1/namespaces/fleet-dashboard/serviceaccounts/fleet-reader/token': { status: {} } });
   await assert.rejects(
     () => onboard.bootstrap({ cluster: CLUSTER, adminToken: 'admin', callFn: api.callFn }),
     /returned no token/
@@ -241,7 +241,7 @@ test('every created object is labelled as managed by the dashboard', async () =>
   assert.ok(created.length >= 6);
   for (const c of created) {
     if (c.body.kind === 'TokenRequest') continue;
-    assert.equal(c.body.metadata.labels['app.kubernetes.io/managed-by'], 'kyma-fleet-dashboard', c.body.kind);
+    assert.equal(c.body.metadata.labels['app.kubernetes.io/managed-by'], 'k8s-fleet-dashboard', c.body.kind);
   }
 });
 
@@ -353,7 +353,7 @@ test('the Wave-1 rule groups are present with get/list/watch only', () => {
 
 /**
  * The 2026-09-16 gap audit. Each group below was refused by SubjectAccessReview for
- * `system:serviceaccount:kyma-fleet:fleet-reader` on the platformsbx cluster while its CRDs
+ * `system:serviceaccount:fleet-dashboard:fleet-reader` on the platformsbx cluster while its CRDs
  * were installed — the page that needed it could only ever render "unavailable". Canary: drop
  * any one rule from readOnlyRules() and the matching line here goes red.
  */

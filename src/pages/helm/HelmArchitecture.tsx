@@ -121,13 +121,13 @@ const MAX_ROWS = 9;
  * The part of a name worth putting in a 176px box.
  *
  * Almost every object a chart creates is named after the release, so truncating from the right
- * renders eighteen nodes that all read `applecare-responder-a…` — a graph where nothing is
+ * renders eighteen nodes that all read `acme-shop-responder-a…` — a graph where nothing is
  * identifiable, which is worse than no labels. Dropping the release-name prefix leaves the part
  * that actually differs (`approuter`, `srv-5cdcdb56d9`), and what was dropped is on screen twice
  * over: in the page title and in the node's own tooltip.
  *
  * A name that does not carry the prefix keeps its tail rather than its head, for the same reason —
- * `pv-shoot--kyma--c-9d0…` identifies nothing, `…-c-9d0a141-abc123` does.
+ * `pv-cluster--prod--c-9d0…` identifies nothing, `…-c-9d0a141-abc123` does.
  */
 function shortName(name: string, release: string): string {
   if (name !== release && release && name.startsWith(`${release}-`)) {

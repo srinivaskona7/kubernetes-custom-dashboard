@@ -121,7 +121,7 @@ type HpaStatusInput = Pick<HpaRow, 'conditions' | 'currentReplicas' | 'maxReplic
 /**
  * The one replica count a `minReplicas == maxReplicas` autoscaler can ever hold — `null` otherwise.
  *
- * Such an HPA cannot change anything: every Kyma module HPA on platform-sbx shipped as 2/2. Its
+ * Such an HPA cannot change anything: every platform-operator HPA on platform-sbx shipped as 2/2. Its
  * counts always satisfy `current >= max`, which is why the ceiling test alone painted three idle
  * autoscalers amber. It is a configuration fact, not load pressure.
  */
@@ -139,7 +139,7 @@ export function hpaFixedAt(h: Partial<Pick<HpaRow, 'minReplicas' | 'maxReplicas'
  *  - `TooManyReplicas` — the desired count was clamped to `maxReplicas`. The ceiling, and the
  *    controller's own word for it, so it holds even while fewer pods than max are running yet.
  *  - `TooFewReplicas` — clamped *up* to `minReplicas`: the floor, the normal state of an idle
- *    workload. On a min == max HPA `current >= max` holds here too, which is how three idle Kyma
+ *    workload. On a min == max HPA `current >= max` holds here too, which is how three idle platform
  *    autoscalers on platform-sbx read amber `At ceiling`.
  *  - `ScaleUpLimit` / `ScaleDownLimit` — a `behavior` rate policy is slowing a change. Moving, not
  *    stuck; `ScaleDownLimit` at max is a spike winding down.

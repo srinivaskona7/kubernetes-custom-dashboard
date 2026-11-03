@@ -2,7 +2,7 @@
   The ingress block of the traffic collector.
 
   Every assertion here is about a *grouping* decision, and grouping is exactly what a live cluster
-  can confirm but never specify: platformsbx happens to serve four Gateway hosts and happens to log
+  can confirm but never specify: a live cluster happens to serve four Gateway hosts and happens to log
   115 lines with no authority, so a read against it proves the code did not crash on that shape and
   nothing more. These tests feed hand-written lines with the shapes the live read does NOT contain
   — a corporate suffix, a port on the authority, a `null` upstream time, an ingress proxy that
@@ -155,8 +155,8 @@ test('a host is bucketed by evidence: configured suffix, declared Gateway, infra
     nodes: ok([]),
     gateways: ok([
       {
-        metadata: { name: 'kyma-gateway', namespace: 'kyma-system' },
-        spec: { servers: [{ port: { number: 443 }, hosts: ['*.c-abc123.kyma.ondemand.com'] }] }
+        metadata: { name: 'public-gateway', namespace: 'istio-system' },
+        spec: { servers: [{ port: { number: 443 }, hosts: ['*.c-abc123.apps.example.net'] }] }
       }
     ])
   });
@@ -164,23 +164,23 @@ test('a host is bucketed by evidence: configured suffix, declared Gateway, infra
 
   assert.strictEqual(classifyHost('shop.corp.example.com', opts).group, 'corporate');
   assert.strictEqual(classifyHost('shop.corp.example.com', opts).matchedSuffix, 'corp.example.com');
-  assert.strictEqual(classifyHost('app.c-abc123.kyma.ondemand.com', opts).group, 'declared');
-  assert.strictEqual(classifyHost('healthz.c-abc123.kyma.ondemand.com', opts).group, 'infra');
+  assert.strictEqual(classifyHost('app.c-abc123.apps.example.net', opts).group, 'declared');
+  assert.strictEqual(classifyHost('healthz.c-abc123.apps.example.net', opts).group, 'infra');
   assert.strictEqual(classifyHost('10.250.0.1', opts).group, 'address');
   assert.strictEqual(classifyHost('somewhere.else.test', opts).group, 'other');
   assert.strictEqual(classifyHost(null, opts).group, 'none');
 
   // The Gateway that admits the host is reported even when the bucket came from a suffix — the
   // two answers are independent, and "corporate domain served by no Gateway" is a finding.
-  const declared = classifyHost('app.c-abc123.kyma.ondemand.com', opts);
-  assert.strictEqual(declared.declaredBy.name, 'kyma-gateway');
-  assert.strictEqual(declared.declaredBy.namespace, 'kyma-system');
+  const declared = classifyHost('app.c-abc123.apps.example.net', opts);
+  assert.strictEqual(declared.declaredBy.name, 'public-gateway');
+  assert.strictEqual(declared.declaredBy.namespace, 'istio-system');
 });
 
 test('a configured suffix wins over the infra list, so nobody loses a real domain to a prefix', () => {
-  // `cp.` is an infra prefix. If it were checked before the configured suffixes, a company whose
+  // `grafana.` is an infra prefix. If it were checked before the configured suffixes, a company whose
   // own domain starts with one of those labels would find its traffic filed under cluster noise.
-  const g = classifyHost('cp.corp.example.com', { gatewayHosts: [], corporate: ['corp.example.com'] });
+  const g = classifyHost('grafana.corp.example.com', { gatewayHosts: [], corporate: ['corp.example.com'] });
   assert.strictEqual(g.group, 'corporate');
 });
 
@@ -194,7 +194,7 @@ test('3xx is its own family, because a redirect loop is not a healthy 2xx', () =
 
 // ------------------------------------------------------- route resolution
 
-test('a host resolves to every object declaring it, APIRule and VirtualService both', () => {
+test('a host resolves to every object declaring it: VirtualService, Ingress and HTTPRoute all', () => {
   const routes = buildRouteIndex({
     virtualservices: ok([
       {
@@ -202,25 +202,57 @@ test('a host resolves to every object declaring it, APIRule and VirtualService b
         spec: { hosts: ['shop.example.com'] }
       }
     ]),
-    apirules: ok([
-      { metadata: { name: 'shop-rule', namespace: 'shop' }, spec: { hosts: ['shop.example.com'] } },
-      // A v1beta1 object converted in place answers on the singular field.
-      { metadata: { name: 'legacy-rule', namespace: 'shop' }, spec: { host: 'legacy.example.com' } }
+    ingresses: ok([
+      { metadata: { name: 'shop-ing', namespace: 'shop' }, spec: { rules: [{ host: 'shop.example.com' }, { host: 'Admin.Example.com' }] } },
+      // A rule with no host is a catch-all on the default backend: it declares no host.
+      { metadata: { name: 'catchall', namespace: 'shop' }, spec: { rules: [{ http: { paths: [] } }] } }
+    ]),
+    httproutes: ok([
+      { metadata: { name: 'shop-route', namespace: 'shop' }, spec: { hostnames: ['shop.example.com', '*.api.example.com'] } }
     ])
   });
 
   const hits = matchRoutes(routes, 'shop.example.com');
-  assert.deepEqual(hits.map(h => `${h.kind}/${h.name}`).sort(), ['APIRule/shop-rule', 'VirtualService/shop-vs']);
-  assert.match(hits[0].evidence, /spec\.hosts|publishes/);
+  assert.deepEqual(hits.map(h => `${h.kind}/${h.name}`).sort(), ['HTTPRoute/shop-route', 'Ingress/shop-ing', 'VirtualService/shop-vs']);
+  assert.match(hits.find(h => h.kind === 'Ingress').evidence, /^Ingress shop\/shop-ing lists shop\.example\.com in spec\.rules\[\]\.host$/);
+  assert.match(hits.find(h => h.kind === 'HTTPRoute').evidence, /^HTTPRoute shop\/shop-route lists shop\.example\.com in spec\.hostnames$/);
 
-  assert.deepEqual(matchRoutes(routes, 'legacy.example.com').map(h => h.name), ['legacy-rule']);
+  assert.deepEqual(matchRoutes(routes, 'admin.example.com').map(h => h.name), ['shop-ing'], 'hosts are compared lower-cased');
+  assert.deepEqual(matchRoutes(routes, 'v1.api.example.com').map(h => h.name), ['shop-route']);
   assert.deepEqual(matchRoutes(routes, 'nobody.example.com'), []);
+  assert.equal(routes.some(r => r.name === 'catchall'), false);
 });
 
-test('an unreadable APIRule read declares no routes rather than throwing the index away', () => {
+test('Ingress and HTTPRoute backends are the Services they send to', () => {
+  const routes = buildRouteIndex({
+    ingresses: ok([{
+      metadata: { name: 'ing', namespace: 'shop' },
+      spec: {
+        defaultBackend: { service: { name: 'fallback', port: { number: 80 } } },
+        rules: [{ host: 'shop.example.com', http: { paths: [{ path: '/', backend: { service: { name: 'web', port: { number: 80 } } } }, { path: '/api', backend: { service: { name: 'API', port: { number: 8080 } } } }, { path: '/r', backend: { resource: { kind: 'Bucket', name: 'b' } } }] } }]
+      }
+    }]),
+    httproutes: ok([{
+      metadata: { name: 'route', namespace: 'shop' },
+      spec: { hostnames: ['r.example.com'], rules: [{ backendRefs: [{ name: 'v1', port: 80 }, { name: 'v2', namespace: 'canary', port: 80 }, { kind: 'ServiceImport', name: 'remote' }] }] }
+    }])
+  });
+  assert.deepEqual(routes.find(r => r.kind === 'Ingress').backends, [
+    { name: 'fallback', namespace: 'shop' },
+    { name: 'web', namespace: 'shop' },
+    { name: 'api', namespace: 'shop' }
+  ]);
+  assert.deepEqual(routes.find(r => r.kind === 'HTTPRoute').backends, [
+    { name: 'v1', namespace: 'shop' },
+    { name: 'v2', namespace: 'canary' }
+  ], 'only a Service backendRef is a Service');
+});
+
+test('an unreadable Ingress or HTTPRoute read declares no routes rather than throwing the index away', () => {
   const routes = buildRouteIndex({
     virtualservices: ok([{ metadata: { name: 'vs', namespace: 'n' }, spec: { hosts: ['a.example.com'] } }]),
-    apirules: gone('FORBIDDEN')
+    ingresses: gone('FORBIDDEN'),
+    httproutes: gone('FORBIDDEN')
   });
   assert.deepEqual(routes.map(r => r.kind), ['VirtualService']);
 });
@@ -249,7 +281,7 @@ test('an unknown flag is reported as unknown rather than silently dropped', () =
 
 /*
   Envoy comma-joins multi-flag values, and the comma is not a stylistic choice — measured on
-  platformsbx, `UF,URX` appeared 38 times in 7,388 access-log lines and no observed value contained
+  a live cluster, `UF,URX` appeared 38 times in 7,388 access-log lines and no observed value contained
   whitespace. The original fixture for this test used `'UF URX'`, which is why a whitespace-only
   split looked correct for as long as it did: the test agreed with the code and both disagreed with
   Envoy. The comma case is the one that has to hold.
@@ -401,18 +433,19 @@ test('a host row names the Gateway that admits it and the objects that declare i
     nodes: ok([]),
     gateways: ok([
       {
-        metadata: { name: 'kyma-gateway', namespace: 'kyma-system' },
+        metadata: { name: 'public-gateway', namespace: 'istio-system' },
         spec: { servers: [{ port: { number: 443 }, hosts: ['*.example.com'] }] }
       }
     ])
   });
   const routes = buildRouteIndex({
     virtualservices: ok([{ metadata: { name: 'shop-vs', namespace: 'shop' }, spec: { hosts: ['shop.example.com'] } }]),
-    apirules: ok([])
+    ingresses: ok([]),
+    httproutes: ok([])
   });
 
   const row = aggregateHosts([rec()], index, { routes }).rows[0];
-  assert.strictEqual(row.gateway.name, 'kyma-gateway');
+  assert.strictEqual(row.gateway.name, 'public-gateway');
   assert.strictEqual(row.gateway.port, 443);
   assert.deepEqual(row.servedBy.map(s => s.name), ['shop-vs']);
 });
@@ -525,7 +558,7 @@ test('a Gateway row reports the TLS credential by NAME and never reads its value
   const rows = ingressGatewayRows(
     ok([
       {
-        metadata: { name: 'apple-gateway-mtls', namespace: 'istio-system' },
+        metadata: { name: 'partner-gateway-mtls', namespace: 'istio-system' },
         spec: {
           selector: { istio: 'ingressgateway' },
           servers: [
@@ -695,10 +728,11 @@ test('collect returns an ingress block scoped to the gateway pod it read', async
       proxyPod('shop-app-1', 'shop')
     ],
     '/virtualservices': [{ metadata: { name: 'shop-vs', namespace: 'shop' }, spec: { hosts: ['shop.example.com'] } }],
-    '/apirules': [{ metadata: { name: 'shop-rule', namespace: 'shop' }, spec: { hosts: ['shop.example.com'] } }],
+    '/ingresses': [{ metadata: { name: 'shop-ing', namespace: 'shop' }, spec: { rules: [{ host: 'shop.example.com' }] } }],
+    '/httproutes': [{ metadata: { name: 'shop-route', namespace: 'shop' }, spec: { hostnames: ['shop.example.com'] } }],
     '/gateways': [
       {
-        metadata: { name: 'kyma-gateway', namespace: 'kyma-system' },
+        metadata: { name: 'public-gateway', namespace: 'istio-system' },
         spec: { servers: [{ port: { number: 443, protocol: 'HTTPS' }, hosts: ['*.example.com'] }] }
       }
     ]
@@ -714,9 +748,9 @@ test('collect returns an ingress block scoped to the gateway pod it read', async
   assert.deepEqual(out.ingress.ingressProxiesUnread, []);
   const row = out.ingress.hosts[0];
   assert.strictEqual(row.host, 'shop.example.com');
-  assert.strictEqual(row.gateway.name, 'kyma-gateway');
-  assert.deepEqual(row.servedBy.map(s => s.kind).sort(), ['APIRule', 'VirtualService']);
-  assert.deepEqual(out.ingress.routesFrom, { virtualservices: 1, apirules: 1 });
+  assert.strictEqual(row.gateway.name, 'public-gateway');
+  assert.deepEqual(row.servedBy.map(s => s.kind).sort(), ['HTTPRoute', 'Ingress', 'VirtualService']);
+  assert.deepEqual(out.ingress.routesFrom, { virtualservices: 1, ingresses: 1, httproutes: 1 });
   // The overall traffic numbers still describe every proxy read — the ingress block narrows, it
   // does not replace.
   assert.strictEqual(out.summary.requests, 3);
@@ -744,20 +778,22 @@ test('an ingress proxy whose log was refused is named, not subtracted', async ()
 test('the four new reads land in summary.unavailable when refused', async () => {
   const listFn = async ({ path }) => {
     if (path.includes('/api/v1/pods')) return [proxyPod('gw-1', 'istio-system')];
-    if (path.includes('/virtualservices') || path.includes('/apirules') ||
+    if (path.includes('/virtualservices') || path.includes('/ingresses') || path.includes('/httproutes') ||
         path.includes('horizontalpodautoscalers') || path.includes('poddisruptionbudgets')) {
       throw Object.assign(new Error('forbidden'), { status: 403 });
     }
     return [];
   };
   const out = await collect({ cluster: CLUSTER, token: 't', listFn, textFn: async () => '' });
-  for (const label of ['virtualservices', 'apirules', 'ingress-hpa', 'ingress-pdb']) {
+  for (const label of ['virtualservices', 'ingresses', 'httproutes', 'ingress-hpa', 'ingress-pdb']) {
     assert.ok(
       out.summary.unavailable.includes(label),
       `${label} must be named in summary.unavailable rather than degrading to an empty list`
     );
   }
   assert.strictEqual(out.ingress.routesFrom.virtualservices, null);
+  assert.strictEqual(out.ingress.routesFrom.ingresses, null);
+  assert.strictEqual(out.ingress.routesFrom.httproutes, null);
 });
 
 test('no raw log line reaches the ingress block', async () => {
@@ -806,7 +842,7 @@ test('isIngressProxy recognises the label and the name, and nothing else', () =>
 });
 
 test('parseAccessLine reads upstream_service_time out of a JSON string', () => {
-  // Kyma's stdout-json provider emits `duration` as a number and `upstream_service_time` as a
+  // Istio's JSON file provider commonly emits `duration` as a number and `upstream_service_time` as a
   // STRING. A `typeof === 'number'` guard would have dropped every upstream measurement.
   const r = parseAccessLine(accessLine({ upstream_service_time: '12', bytes_received: 340 }));
   assert.strictEqual(r.upstreamMs, 12);
@@ -821,7 +857,7 @@ test('parseAccessLine reads upstream_service_time out of a JSON string', () => {
 });
 
 test('a transport failure that merely repeats the termination detail is reported once', () => {
-  // Kyma maps `upstream_transport_failure_reason` to %CONNECTION_TERMINATION_DETAILS%, so the two
+  // A mesh can map `upstream_transport_failure_reason` to %CONNECTION_TERMINATION_DETAILS%, so the two
   // fields carry the same text. Printing both under two different explanations told operators the
   // upstream connection had failed when the client had simply gone away.
   const same = parseAccessLine(

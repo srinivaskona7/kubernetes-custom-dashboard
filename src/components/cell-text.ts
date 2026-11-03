@@ -38,7 +38,7 @@ const MAX_LENGTH = 400;
 
 /**
  * The public entry point. Clamps whatever the walk produced, including the trivial case: a cell
- * rendering one long string returned it untouched, so a 5 KB Helm values blob or an OPA rejection
+ * rendering one long string returned it untouched, so a 5 KB Helm values blob or an admission rejection
  * message became a 5 KB tooltip. Caught by the length test, which is why it is a test and not a
  * comment.
  */

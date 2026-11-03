@@ -135,8 +135,8 @@ dist
 # Claude Code machine-local settings (permission grants, etc.)
 .claude/settings.local.json
 
-# Narrative certificates (generated locally)
-cert/
+# Source maps and local build artifacts
+*.map
 
 # SQLite database (local dev)
 /data/

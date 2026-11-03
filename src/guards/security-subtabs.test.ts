@@ -8,9 +8,8 @@ import { fileURLToPath } from 'node:url';
 const FAKE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'test', 'fleet');
 
 /**
- * Security & Compliance shows three sub-tabs: Namespace Compliance (the default), Admission & Policy
- * and Security & Isolation (restored 2026-09-26). PDBs & Drain was removed from the
- * strip; `PdbSection` is kept in SecurityTab.tsx but must not be mounted, and no copy may point at it.
+ * Security & Compliance shows two sub-tabs: Namespace Compliance (the default) and Security &
+ * Isolation (restored 2026-09-26). PDBs & Drain was removed from the strip, and no copy may point at it.
  */
 
 
@@ -31,14 +30,13 @@ function securitySectionIds() {
 
 test('Security & Compliance starts with Namespace Compliance', () => {
   // Order matters: SecurityTab falls back to SECTIONS[0], so the first entry is the default.
-  assert.deepStrictEqual(securitySectionIds(), ['compliance', 'admission', 'isolation']);
+  assert.deepStrictEqual(securitySectionIds(), ['compliance', 'isolation']);
   assert.match(SECURITY_TAB, /useSection<SectionId>\(SECTIONS, SECTIONS\[0\]\.id\)/);
 });
 
 test('the removed PDB section is not mounted; isolation is', () => {
   assert.match(SECURITY_TAB, /section === 'isolation' && <IsolationSection id=\{id\} \/>/);
   assert.doesNotMatch(SECURITY_TAB, /<PdbSection\b/);
-  assert.match(SECURITY_TAB, /section === 'admission' && <AdmissionSection/);
   assert.match(SECURITY_TAB, /section === 'compliance'/);
 });
 

@@ -1,37 +1,37 @@
 /**
- * Authentication: map the identity shieldAuth verified onto the fleet's own user shape.
+ * Authentication: map the identity oidcAuth verified onto the fleet's own user shape.
  *
- * shieldAuth (server/middleware/shieldAuth.js) is mounted app-wide: it verifies the Shield
- * OIDC JWT and checks membership of ALLOWED_GROUPS before a request reaches /api/fleet, and
- * it leaves `{ email, groups }` on `req.user`. This middleware does not verify anything a
- * second time. It turns that identity into the `{ id, email, scopes }` the router reads, and
- * it is where "who may change the fleet" is decided:
+ * oidcAuth (server/middleware/oidcAuth.js) is mounted app-wide: under AUTH_MODE=oidc it
+ * verifies the bearer JWT against the issuer's JWKS and checks membership of ALLOWED_GROUPS
+ * before a request reaches /api/fleet, and it leaves `{ email, groups }` on `req.user`. This
+ * middleware does not verify anything a second time. It turns that identity into the
+ * `{ id, email, scopes }` the router reads, and it is where "who may change the fleet" is
+ * decided:
  *
- *   - every caller shieldAuth let through may read;
- *   - members of FLEET_ADMIN_GROUPS (comma-separated numeric group ids, parsed like
+ *   - every caller oidcAuth let through may read;
+ *   - members of FLEET_ADMIN_GROUPS (comma-separated group names, parsed like
  *     ALLOWED_GROUPS) additionally carry the admin scope, which gates onboard, remove and
  *     renew in router.js. With FLEET_ADMIN_GROUPS unset nobody is an admin: the fail-closed
  *     direction for an API that writes cluster credentials.
  *
- * Outside production shieldAuth is bypassed, and so is this: the caller is a fixed local
- * development identity with the admin scope. FLEET_AUTH=none selects the same identity
- * explicitly, and the server refuses to start with it in production (see server/index.js).
+ * Under AUTH_MODE=none oidcAuth passes everything through, and so does this: the caller is a
+ * fixed local development identity with the admin scope. FLEET_AUTH=none selects the same
+ * identity explicitly, and the server refuses to start with either in production (see
+ * assertAuthAllowed in server/fleet/mount.js).
  */
-export const SCOPE = 'kyma-fleet-admin';
+export const SCOPE = 'fleet-admin';
 
-/** Numeric group ids from a comma-separated env value; anything non-numeric is dropped. */
+/** Group names from a comma-separated env value, trimmed; empty entries are dropped. */
 export function parseGroups(raw) {
-  const ids = String(raw || '')
+  const names = String(raw || '')
     .split(',')
     .map(s => s.trim())
-    .filter(Boolean)
-    .map(Number)
-    .filter(n => !Number.isNaN(n));
-  return [...new Set(ids)];
+    .filter(Boolean);
+  return [...new Set(names)];
 }
 
 /**
- * The caller's identity, or `null` when shieldAuth left none.
+ * The caller's identity, or `null` when oidcAuth left none.
  *
  * Never a placeholder string. `router.js` widens its OIDC cache key by this value as soon as
  * the fleet holds an OIDC cluster, and a fallback like `'unknown'` would fold every caller
@@ -39,7 +39,7 @@ export function parseGroups(raw) {
  * another's cached OIDC credential or result. `null` is not cacheable under, which is the
  * point: the middleware refuses instead of caching under a name that isn't one.
  *
- * @param {{email?: string} | undefined} user the `req.user` shieldAuth set
+ * @param {{email?: string} | undefined} user the `req.user` oidcAuth set
  * @returns {string | null}
  */
 export function identityOf(user) {
@@ -71,7 +71,7 @@ export function createAuth(opts = {}) {
       });
     }
 
-    const groups = Array.isArray(req.user.groups) ? req.user.groups : [];
+    const groups = Array.isArray(req.user.groups) ? req.user.groups.map(String) : [];
     const rawAdminGroups = env.FLEET_ADMIN_GROUPS !== undefined ? env.FLEET_ADMIN_GROUPS : env.ALLOWED_GROUPS;
     const adminGroups = parseGroups(rawAdminGroups);
     const admin = groups.some(g => adminGroups.includes(g));

@@ -15,7 +15,7 @@ const FAKE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '
  *   .tbl-mid    1000 / 700    nine columns
  *   .tbl-wide   1300 / 1000   ten or more columns
  *   .tbl-xwide  1440 / 1120   ten to twelve numeric columns with wrapped headers
- *   .tbl-lean   1440 / 1040   eleven columns whose priority-1 set is narrow (OPA policies)
+ *   .tbl-lean   1440 / 1040   eleven columns whose priority-1 set is narrow (policy tables)
  *
  * `xwide` was added for the retired Top Utilization tab and this file was not told about it, so its
  * four tables — ten, eleven, eleven and twelve columns — read as `base` and the suite reported them as declaring
@@ -25,7 +25,7 @@ const FAKE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '
  * that is too LOW for its column count does not shed too much, it sheds NOTHING. The thresholds are
  * container widths, and a wide table's container at a 1440px viewport is roughly 1090px — above
  * `mid`'s 1000px trigger, so `mid` stays quiet and eleven columns render and clip off the right
- * edge. That is exactly how the OPA Policies, Violations and Webhooks tables lost Enforcement,
+ * edge. That is exactly how the policy, violation and webhook tables lost Enforcement,
  * Status and Violations: not to an overzealous priority system, but to one that never fired.
  *
  * Two invariants follow, and both are checked below against the real component sources:
@@ -59,7 +59,7 @@ const DYNAMIC_SAFE_TIERS = new Set(['wide', 'xwide', 'lean']);
  *
  * An earlier version failed any table with fewer than nine columns that declared a tier, on the
  * reasoning that "a threshold firing where nothing overflows is data loss". Measurement disproved
- * it: column count does not predict overflow, total content width does. OPA Admission Webhooks (9
+ * it: column count does not predict overflow, total content width does. An admission-webhook table (9
  * columns) and the Workloads table (9) both overflowed a 1090px container by hundreds of pixels and
  * both needed `wide`, because their text columns are wide, not because they are many. Keeping that
  * rule would have blocked the fix it was written to protect.
@@ -421,8 +421,8 @@ test('every DataTable declares the shed tier its column count needs', () => {
  *
  * `.tbl tbody td` already sets `white-space: nowrap`, and `table-layout: auto` treats a `width` on
  * the `th` as a suggestion the widest body cell overrides. So the class announces "this text is
- * clipped" while the column silently grows to its longest row instead. Measured at 1440: OPA
- * Overview's Purpose column rendered 961px inside a 1090px container and overflowed the table by
+ * clipped" while the column silently grows to its longest row instead. Measured at 1440: a policy
+ * overview's Purpose column rendered 961px inside a 1090px container and overflowed the table by
  * 1065px, and the Workloads table's Workload column rendered 528px against a declared 260px.
  *
  * `width` does NOT satisfy this rule. Only `max`, which `DataTable` applies to both the `th` and

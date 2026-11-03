@@ -27,7 +27,7 @@ import {
 
 const subject = (over: Partial<DriftSubject> = {}): DriftSubject => ({
   name: 'keda-manager',
-  namespace: 'kyma-system',
+  namespace: 'platform-system',
   drifted: false,
   driftDetails: [],
   ...over
@@ -136,8 +136,8 @@ describe('explanationOf', () => {
 
 describe('imageRef', () => {
   it('splits repo and tag', () => {
-    expect(imageRef('europe-docker.pkg.dev/kyma/prod/keda-manager:1.4.0')).toEqual({
-      repo: 'europe-docker.pkg.dev/kyma/prod/keda-manager',
+    expect(imageRef('europe-docker.pkg.dev/platform/prod/keda-manager:1.4.0')).toEqual({
+      repo: 'europe-docker.pkg.dev/platform/prod/keda-manager',
       tag: '1.4.0',
       digest: null,
       version: '1.4.0'
@@ -188,7 +188,7 @@ describe('imageRef', () => {
     // The not-comparable pair: a long pinned reference against a bare image ID. Both sides must
     // produce something printable — the bare ID has no repository at all, and returning '' for it
     // would render an em-dash where the operator needs to see what the runtime actually reported.
-    const pinned = imageRef('europe-docker.pkg.dev/gardener-project/releases/coredns:v1.14.7@sha256:086b5184d964');
+    const pinned = imageRef('europe-docker.pkg.dev/k8s-project/releases/coredns:v1.14.7@sha256:086b5184d964');
     expect(pinned.tag).toBe('v1.14.7');
     expect(pinned.version).toBe('v1.14.7');
     const bare = imageRef('sha256:1a3d043f79f8');
@@ -203,8 +203,8 @@ describe('imageRef', () => {
 
 describe('rolloutRestartCommand', () => {
   it('is the command an operator runs in their own terminal, unquoted', () => {
-    expect(rolloutRestartCommand('keda-manager', 'kyma-system')).toBe(
-      'kubectl rollout restart deployment keda-manager -n kyma-system'
+    expect(rolloutRestartCommand('keda-manager', 'platform-system')).toBe(
+      'kubectl rollout restart deployment keda-manager -n platform-system'
     );
   });
 });

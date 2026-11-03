@@ -30,7 +30,7 @@ describe('journey status', () => {
     expect(failureRoot(path)).toEqual({ node: 'srv-1', reason: 'HTTP 500' });
     const refused = { nodes: [{ id: 'g', kind: 'gateway', label: 'gw', code: 403, codeClass: 'client' }], edges: [] } as unknown as JourneyPath;
     expect(failureRoot(refused)).toEqual({ node: 'gw', reason: 'HTTP 403' });
-    expect(failureRoot(refused, { decidedBy: [{ namespace: 'istio-system', name: 'apple-acl', policyInferred: false }] } as never)).toEqual({ node: 'istio-system/apple-acl', reason: 'Authorization policy denied request' });
-    expect(failureRoot(refused, { decidedBy: [{ namespace: 'istio-system', name: 'apple-acl', policyInferred: true }] } as never)).toEqual({ node: 'gw', reason: 'HTTP 403 · no ALLOW rule matched (istio-system/apple-acl, inferred)' });
+    expect(failureRoot(refused, { decidedBy: [{ namespace: 'istio-system', name: 'edge-acl', policyInferred: false }] } as never)).toEqual({ node: 'istio-system/edge-acl', reason: 'Authorization policy denied request' });
+    expect(failureRoot(refused, { decidedBy: [{ namespace: 'istio-system', name: 'edge-acl', policyInferred: true }] } as never)).toEqual({ node: 'gw', reason: 'HTTP 403 · no ALLOW rule matched (istio-system/edge-acl, inferred)' });
   });
 });

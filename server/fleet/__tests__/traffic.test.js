@@ -117,20 +117,20 @@ test('unreadable Telemetry CRs report "unknown", never "off"', () => {
   assert.strictEqual(v.reason, 'FORBIDDEN');
 });
 
-// ------------------------------------- mesh providers: stdout-json vs kyma-logs
+// ------------------------------------- mesh providers: stdout-json vs otel-logs
 
 /**
- * The four `extensionProviders` a stock Kyma mesh declares, copied from the `istio` ConfigMap on
- * platformsbx (2026-09-17). Two of them are access-log providers and they behave oppositely:
- * `stdout-json` writes to the stream `pods/log` returns, `kyma-logs` streams to the OTLP gateway
+ * The four `extensionProviders` a managed Istio mesh declares, copied from the `istio` ConfigMap on
+ * a live cluster. Two of them are access-log providers and they behave oppositely:
+ * `stdout-json` writes to the stream `pods/log` returns, `otel-logs` streams to the OTLP gateway
  * and writes nothing. Trimmed to the keys this module reads; the shape is verbatim.
  */
 const MESH_YAML = `
 extensionProviders:
-- name: kyma-traces
+- name: otel-traces
   opentelemetry:
     port: 4317
-    service: telemetry-otlp-traces.kyma-system.svc.cluster.local
+    service: otel-traces.observability.svc.cluster.local
 - name: envoy
   envoyFileAccessLog:
     logFormat:
@@ -145,17 +145,17 @@ extensionProviders:
         path: "%REQ(X-ENVOY-ORIGINAL-PATH?:PATH)%"
         response_code: "%RESPONSE_CODE%"
     path: /dev/stdout
-- name: kyma-logs
+- name: otel-logs
   envoyOtelAls:
     logFormat:
       labels:
         http.request.method: "%CEL(request.method)%"
         http.response.status_code: "%CEL(response.code)%"
-        kyma.module: istio
+        mesh.module: istio
         url.path: "%CEL(request.url_path)%"
-    logName: kyma-logs
+    logName: otel-logs
     port: 4317
-    service: telemetry-otlp-logs.kyma-system.svc.cluster.local
+    service: otel-logs.observability.svc.cluster.local
 `;
 
 const meshConfigMap = (mesh = MESH_YAML) => ok([{ metadata: { name: 'istio', namespace: 'istio-system' }, data: { mesh } }]);
@@ -179,17 +179,17 @@ test('the mesh config tells a stdout provider apart from an OTLP one', () => {
     destination: '/dev/stdout',
     fields: 'envoy'
   });
-  assert.deepStrictEqual(mesh.byName['kyma-logs'], {
-    name: 'kyma-logs',
+  assert.deepStrictEqual(mesh.byName['otel-logs'], {
+    name: 'otel-logs',
     kind: 'otlp',
     implementation: 'envoyOtelAls',
     readable: false,
-    destination: 'telemetry-otlp-logs.kyma-system.svc.cluster.local:4317',
+    destination: 'otel-logs.observability.svc.cluster.local:4317',
     fields: 'otel'
   });
   // A tracing provider is not an access-log provider, and saying "unreadable" about it for the
   // right reason matters: it is not a log that went somewhere else, it is not a log at all.
-  assert.strictEqual(mesh.byName['kyma-traces'].kind, 'not-access-log');
+  assert.strictEqual(mesh.byName['otel-traces'].kind, 'not-access-log');
   // An empty label map is still a file provider on stdout — Envoy's own default line format.
   assert.strictEqual(mesh.byName.envoy.readable, true);
   assert.strictEqual(mesh.byName.envoy.fields, null);
@@ -223,21 +223,21 @@ test('an unreadable or keyless mesh ConfigMap resolves nothing rather than guess
   assert.strictEqual(meshProviders(meshConfigMap('extensionProviders:\n  - : :\n   bad')).unavailable, true);
 });
 
-test('access logging through kyma-logs alone is "on" but NOT readable here', () => {
-  const v = accessLogVerdict(telemetryUsing('kyma-logs'), meshProviders(meshConfigMap()));
+test('access logging through otel-logs alone is "on" but NOT readable here', () => {
+  const v = accessLogVerdict(telemetryUsing('otel-logs'), meshProviders(meshConfigMap()));
 
   assert.strictEqual(v.state, 'on');
   assert.strictEqual(v.readable, false);
   assert.match(v.why, /cannot see these requests/);
-  assert.match(v.why, /telemetry-otlp-logs\.kyma-system\.svc\.cluster\.local:4317/);
+  assert.match(v.why, /otel-logs\.observability\.svc\.cluster\.local:4317/);
   // The whole point: a zero on this tab must not read as "nothing is failing".
   assert.match(v.why, /not a statement that nothing is failing/);
 });
 
-test('kyma-logs alongside stdout-json is still readable, because one of them writes to stdout', () => {
-  const v = accessLogVerdict(telemetryUsing('stdout-json', 'kyma-logs'), meshProviders(meshConfigMap()));
+test('otel-logs alongside stdout-json is still readable, because one of them writes to stdout', () => {
+  const v = accessLogVerdict(telemetryUsing('stdout-json', 'otel-logs'), meshProviders(meshConfigMap()));
   assert.strictEqual(v.readable, true);
-  // The mid-migration state, and the one a wrong `every`/`some` would break: adding kyma-logs
+  // The mid-migration state, and the one a wrong `every`/`some` would break: adding otel-logs
   // before removing stdout-json must not blank the tab.
   assert.deepStrictEqual(v.providerDetail.map(p => p.readable), [true, false]);
 });
@@ -256,7 +256,7 @@ test('the readability caveat is added to the scope sentence, never substituted f
   const scoped = ok([
     {
       metadata: { name: 'ns-only', namespace: 'shop' },
-      spec: { accessLogging: [{ providers: [{ name: 'kyma-logs' }] }], selector: { matchLabels: { app: 'srv' } } }
+      spec: { accessLogging: [{ providers: [{ name: 'otel-logs' }] }], selector: { matchLabels: { app: 'srv' } } }
     }
   ]);
   const v = accessLogVerdict(scoped, meshProviders(meshConfigMap()));
@@ -287,8 +287,8 @@ test('non-request proxy chatter and malformed JSON are not requests', () => {
 });
 
 /**
- * A line labelled the `kyma-logs` way: OpenTelemetry semantic conventions, not Envoy's names.
- * Taken from that provider's `logFormat.labels` on platformsbx.
+ * A line labelled the `otel-logs` way: OpenTelemetry semantic conventions, not Envoy's names.
+ * Taken from that provider's `logFormat.labels` on a live cluster.
  */
 function otelAccessLine(over = {}) {
   return JSON.stringify({
@@ -298,7 +298,7 @@ function otelAccessLine(over = {}) {
     'http.request.method': 'GET',
     'http.response.size': 512,
     'http.response.status_code': 503,
-    'kyma.module': 'istio',
+    'mesh.module': 'istio',
     'network.protocol.name': 'HTTP/1.1',
     'server.address': 'shop.example.com',
     'url.path': '/checkout',
@@ -317,7 +317,7 @@ test('an OTel-labelled line parses under the same reader as an Envoy-labelled on
   assert.strictEqual(r.requestId, 'req-otel-1');
   assert.strictEqual(r.downstreamRemote, '17.65.195.108');
   assert.strictEqual(r.bytesSent, 512);
-  // Canary: before the dual vocabulary this returned null, every line of a kyma-logs-formatted
+  // Canary: before the dual vocabulary this returned null, every line of a otel-logs-formatted
   // window counted as `linesUnparsed`, and the tab reported zero errors out of a full read.
 });
 
@@ -499,10 +499,10 @@ test('an authority matches the Gateway whose server host admits it, longest wild
     pods: ok([]), services: ok([]), endpointslices: ok([]), nodes: ok([]),
     gateways: ok([
       { metadata: { name: 'broad', namespace: 'istio-system' }, spec: { servers: [{ hosts: ['*'], port: { number: 443 } }] } },
-      { metadata: { name: 'kyma', namespace: 'istio-system' }, spec: { servers: [{ hosts: ['*.example.com'], port: { number: 443 } }] } }
+      { metadata: { name: 'public-gateway', namespace: 'istio-system' }, spec: { servers: [{ hosts: ['*.example.com'], port: { number: 443 } }] } }
     ])
   });
-  assert.strictEqual(matchGateway(index, 'shop.example.com').name, 'kyma');
+  assert.strictEqual(matchGateway(index, 'shop.example.com').name, 'public-gateway');
   assert.strictEqual(matchGateway(index, 'other.test').name, 'broad');
   assert.strictEqual(matchGateway(index, ''), null);
 });
@@ -537,7 +537,7 @@ test('a native sidecar (istio-proxy as an init container) is a readable proxy', 
     status: { phase: 'Running', containerStatuses: [] }
   };
   assert.strictEqual(selectProxies([pod], { maxPods: 10 }).candidates, 1);
-  // Canary: checking `spec.containers` alone found 3 proxies on platformsbx, which runs 38 —
+  // Canary: checking `spec.containers` alone found 3 proxies on a live cluster, which runs 38 —
   // 35 pods are native-sidecar and every one was invisible to this tab.
 });
 
@@ -676,16 +676,16 @@ test('a full tail is reported as truncated, so the window is not read as complet
 });
 
 /*
-  The canary for the whole kyma-logs change, at the level an operator actually experiences it.
+  The canary for the whole otel-logs change, at the level an operator actually experiences it.
 
-  Before this, a mesh switched to `kyma-logs` produced: accessLog.state "on", ten proxies read,
+  Before this, a mesh switched to `otel-logs` produced: accessLog.state "on", ten proxies read,
   three thousand lines, zero requests parsed, and a page reporting "0 server errors" with "No
   4xx, 5xx or unanswered connection in the window that was read". Every number true, the
   conclusion false. The tab must instead refuse to read, say so in `window`, and explain why.
 */
-test('a mesh logging only to kyma-logs reads no proxy and says so, instead of reporting zero errors', async () => {
+test('a mesh logging only to otel-logs reads no proxy and says so, instead of reporting zero errors', async () => {
   const listFn = fakeList({
-    telemetries: telemetryUsing('kyma-logs').items,
+    telemetries: telemetryUsing('otel-logs').items,
     '/configmaps': meshConfigMap().items,
     '/api/v1/pods': Array.from({ length: 12 }, (_, i) => proxyPod(`srv-${i}`, 'shop'))
   });
@@ -707,7 +707,7 @@ test('a mesh logging only to kyma-logs reads no proxy and says so, instead of re
 test('an unreadable mesh config never skips the read — an unknown is not a proof', async () => {
   const listFn = async ({ path }) => {
     if (path.includes('/configmaps')) throw Object.assign(new Error('nope'), { status: 403 });
-    if (path.includes('telemetries')) return telemetryUsing('kyma-logs').items;
+    if (path.includes('telemetries')) return telemetryUsing('otel-logs').items;
     if (path.includes('/api/v1/pods')) return [proxyPod('gw-1', 'istio-system')];
     return [];
   };
@@ -838,9 +838,9 @@ test('a provider named after an Object prototype member does not resolve to one'
 
 test('an unreadable mesh config is not reported as the provider being undeclared', () => {
   // Every provider lands in `unresolvedProviders` when the ConfigMap could not be read, so the
-  // old wording claimed "kyma-logs is not declared in the mesh config" — a statement about a
+  // old wording claimed "otel-logs is not declared in the mesh config" — a statement about a
   // file nobody opened, printed directly above the UI's own "could not be read" note.
-  const v = accessLogVerdict(telemetryUsing('kyma-logs'), meshProviders(gone('FORBIDDEN')));
+  const v = accessLogVerdict(telemetryUsing('otel-logs'), meshProviders(gone('FORBIDDEN')));
   assert.strictEqual(v.readable, null);
   assert.match(v.why, /could not be read/);
   assert.doesNotMatch(v.why, /not declared in the mesh config/);
@@ -850,17 +850,17 @@ test('an unreadable mesh config is not reported as the provider being undeclared
 });
 
 test('a tracing provider named under accessLogging records nothing, and is not said to record elsewhere', () => {
-  // `kyma-traces` classifies as `not-access-log` with a null destination, so the verdict was
+  // `otel-traces` classifies as `not-access-log` with a null destination, so the verdict was
   // `readable: false` and the UI told the operator their requests were being recorded and
   // pointed them at an em-dash. Nothing is recorded here or anywhere else.
-  const v = accessLogVerdict(telemetryUsing('kyma-traces'), meshProviders(meshConfigMap()));
+  const v = accessLogVerdict(telemetryUsing('otel-traces'), meshProviders(meshConfigMap()));
   assert.strictEqual(v.readable, false);
   assert.strictEqual(v.recordedElsewhere, false);
   assert.match(v.why, /not for access logging/);
   assert.doesNotMatch(v.why, /Query the destination/);
 
   // A real off-pod sink still is recorded elsewhere, and still says so.
-  const otlp = accessLogVerdict(telemetryUsing('kyma-logs'), meshProviders(meshConfigMap()));
+  const otlp = accessLogVerdict(telemetryUsing('otel-logs'), meshProviders(meshConfigMap()));
   assert.strictEqual(otlp.recordedElsewhere, true);
   assert.match(otlp.why, /Query the destination/);
 });

@@ -3,8 +3,8 @@
  * need and neither should own.
  *
  * A Telemetry CR *names* providers; only `istio-system/istio`'s `mesh` key says what each one
- * **is**, and the two Kyma ships are opposites: `stdout-json` (`envoyFileAccessLog` →
- * `/dev/stdout`) lands in the stream `pods/log` returns, while `kyma-logs` (`envoyOtelAls` → the
+ * **is**, and the two common ones are opposites: `stdout-json` (`envoyFileAccessLog` →
+ * `/dev/stdout`) lands in the stream `pods/log` returns, while `otel-logs` (`envoyOtelAls` → the
  * OTLP gateway) writes nothing to the pod at all. Without this resolution a tab can only print a
  * provider's name, which tells an operator nothing about why it is empty.
  *

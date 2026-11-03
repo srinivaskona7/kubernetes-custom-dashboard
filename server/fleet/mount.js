@@ -1,5 +1,5 @@
 /**
- * Mounts the Kyma Fleet Dashboard's REST API, /api/fleet, on the template's Express app.
+ * Mounts the Kubernetes Fleet Dashboard's REST API, /api/fleet, on the template's Express app.
  *
  * What the fleet code needs from the pod, and nothing more:
  *   - the projected token mount at FLEET_TOKENS_PATH (read-only)
@@ -26,6 +26,7 @@ const { createAuth } = authModule;
 import jsonBoundary from './json-boundary.js';
 import redisStoreModule from './redis-store.js';
 const { fleetStore } = redisStoreModule;
+import { authMode } from '../middleware/oidcAuth.js';
 
 const FLEET_MOUNT = fleetRouter.MOUNT_PATH;
 const MAX_KUBECONFIG_BYTES = fleetRouter.MAX_KUBECONFIG_BYTES;
@@ -33,19 +34,29 @@ const MAX_KUBECONFIG_BYTES = fleetRouter.MAX_KUBECONFIG_BYTES;
 /**
  * A misconfigured NODE_ENV must not be the only thing standing between the fleet and an
  * unauthenticated API. Throws; the caller decides whether that is fatal.
+ *
+ * Refused: either switch that turns authentication off in production, and an oidc mode with
+ * no key set to verify against — oidcAuth would then refuse every request, which is safe but
+ * is a deployment that cannot work and should say so at start rather than per request.
  */
 export function assertAuthAllowed(env = process.env) {
   if (env.NODE_ENV === 'production' && env.FLEET_AUTH === 'none') {
     throw new Error('FLEET_AUTH=none is not permitted when NODE_ENV=production');
   }
+  if (env.NODE_ENV === 'production' && authMode(env) === 'none') {
+    throw new Error('AUTH_MODE=none is not permitted when NODE_ENV=production');
+  }
+  if (authMode(env) === 'oidc' && !env.OIDC_JWKS_URL) {
+    throw new Error('AUTH_MODE=oidc requires OIDC_JWKS_URL');
+  }
 }
 
 /**
- * Fleet auth is off exactly when shieldAuth is: outside production, or when FLEET_AUTH=none
- * says so explicitly (which assertAuthAllowed refuses in production).
+ * Fleet auth is off exactly when oidcAuth is (AUTH_MODE=none, the default outside production),
+ * or when FLEET_AUTH=none says so explicitly. assertAuthAllowed refuses both in production.
  */
 export function fleetAuthDisabled(env = process.env) {
-  return env.FLEET_AUTH === 'none' || env.NODE_ENV !== 'production';
+  return env.FLEET_AUTH === 'none' || authMode(env) === 'none';
 }
 
 // There is one data path and it is the real one: the collectors reach real clusters through
@@ -82,7 +93,7 @@ export function mountFleet(app, opts = {}) {
   if (process.env.FLEET_ALLOW_MANUAL_RENEW !== 'false') {
     try {
       tokenWriter = new SecretTokenWriter({
-        secretName: process.env.FLEET_TOKENS_SECRET || 'kyma-fleet-tokens'
+        secretName: process.env.FLEET_TOKENS_SECRET || 'fleet-dashboard-tokens'
       });
     } catch (err) {
       log.warn(`[fleet] manual renewal disabled: ${err.message}`);
@@ -91,14 +102,14 @@ export function mountFleet(app, opts = {}) {
   if (process.env.FLEET_ALLOW_ONBOARD !== 'false') {
     try {
       clusterWriter = new SecretTokenWriter({
-        secretName: process.env.FLEET_CLUSTERS_SECRET || 'kyma-fleet-clusters'
+        secretName: process.env.FLEET_CLUSTERS_SECRET || 'fleet-dashboard-clusters'
       });
     } catch (err) {
       log.warn(`[fleet] cluster onboarding disabled: ${err.message}`);
     }
   }
 
-  // Identity comes from shieldAuth, mounted app-wide in server/index.js. This only maps it
+  // Identity comes from oidcAuth, mounted app-wide in server/index.js. This only maps it
   // onto the fleet's user shape and decides who may write (FLEET_ADMIN_GROUPS).
   const auth = createAuth({ disabled: authDisabled });
 
@@ -135,10 +146,11 @@ export function mountFleet(app, opts = {}) {
   // reproduces production behaviour rather than diverging from it.
   jsonBoundary.mountJsonBoundary(app, FLEET_MOUNT);
 
-  log.info(`[fleet] ${FLEET_MOUNT} mounted; auth: ${authDisabled ? 'DISABLED (development)' : 'shield (FLEET_ADMIN_GROUPS gates writes)'}`);
+  log.info(`[fleet] ${FLEET_MOUNT} mounted; auth: ${authDisabled ? 'DISABLED (development)' : 'oidc (FLEET_ADMIN_GROUPS gates writes)'}`);
   log.info(`[fleet] writers: renew=${Boolean(tokenWriter)} onboard=${Boolean(clusterWriter)} rollout=${process.env.FLEET_ALLOW_ROLLOUT !== 'false'}`);
   log.info(`[fleet] automatic renewal: ${renewer ? 'in-process' : 'OFF'}`);
   log.info(`[fleet] clusters: ${registry.all().map(c => `${c.id}${c.enabled ? '' : ' (disabled)'}`).join(', ') || 'none'}`);
+  return { registry };
 }
 
 export default { mountFleet, assertAuthAllowed, fleetAuthDisabled };

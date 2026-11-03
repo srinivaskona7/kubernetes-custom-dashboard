@@ -106,7 +106,7 @@ const CLUSTER: Record<string, Entry> = {
       'The request failed at the network level — DNS, TLS, a refused connection or a timeout — so the API ' +
       'server never answered. This console cannot tell from here whether the cluster is healthy.',
     action:
-      'Confirm the API server URL is correct and reachable from this app’s egress path. A missing Kyma ' +
+      'Confirm the API server URL is correct and reachable from this app’s egress path. A missing ' +
       'egress allowlist entry for the cluster host is the usual cause.',
     tone: 'bad'
   },
@@ -139,11 +139,11 @@ const CLUSTER: Record<string, Entry> = {
   TOO_LARGE,
   RESPONSE_TOO_LARGE: TOO_LARGE,
   NOT_RECONCILED: {
-    title: 'Kyma has not reconciled this object yet',
+    title: 'The controller has not reconciled this object yet',
     meaning:
       'The object exists but its controller has not produced a status, so there is nothing authoritative to ' +
       'report about it. This is normal for seconds after a change and abnormal if it lasts.',
-    action: 'Refresh shortly. If the state persists, the owning Kyma module’s controller is where to look.',
+    action: 'Refresh shortly. If the state persists, the owning operator’s controller is where to look.',
     tone: 'warn'
   }
 };
@@ -161,10 +161,10 @@ const SESSION: Record<string, Entry> = {
   MISSING_SCOPE: {
     title: 'This account is not authorized for that change',
     meaning:
-      'The request needed the kyma-fleet-admin scope and this sign-in does not carry it. Reading the fleet ' +
+      'The request needed the fleet-admin scope and this sign-in does not carry it. Reading the fleet ' +
       'is unaffected; only onboarding, removing and token renewal are gated.',
     action:
-      'Ask an administrator to assign the KymaFleetAdminRC role collection in the BTP cockpit, then sign out ' +
+      'Ask an administrator to grant the fleet-admin scope in your identity provider, then sign out ' +
       'and in again so the new scope is in your token.',
     tone: 'warn'
   },
@@ -240,7 +240,7 @@ const INPUT: Record<string, Entry> = {
     meaning:
       'The token was valid but carried no logon name or user name, so this console cannot keep your ' +
       'results apart from anyone else’s and refused the request rather than share them.',
-    action: 'Sign out and sign in again. If it repeats, ask the BTP subaccount admin to check the identity provider sends a user name.',
+    action: 'Sign out and sign in again. If it repeats, ask an administrator to check the identity provider sends a user name.',
     tone: 'warn'
   },
   NO_CA: {
@@ -254,7 +254,7 @@ const INPUT: Record<string, Entry> = {
   BAD_API_URL: {
     title: 'The API server URL could not be parsed',
     meaning: 'It is not a valid URL, so no connection was attempted.',
-    action: 'Enter the full URL, scheme included — for example `https://api.example.kyma.ondemand.com`.',
+    action: 'Enter the full URL, scheme included — for example `https://api.example.com`.',
     tone: 'warn'
   },
   BLOCKED_API_URL: {
@@ -294,7 +294,7 @@ const INPUT: Record<string, Entry> = {
     meaning:
       'This dashboard is read-only by design: it exposes no control that mutates a cluster resource, and the ' +
       'request was refused before reaching the cluster.',
-    action: 'Perform the change with your own cluster access, through kubectl or the Kyma dashboard.',
+    action: 'Perform the change with your own cluster access, through kubectl or your cluster’s own console.',
     tone: 'info'
   },
   TEMPLATE_ERROR: {

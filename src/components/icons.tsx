@@ -68,7 +68,6 @@ export type IconName =
   | 'alert-triangle'
   | 'bar-chart'
   | 'pulse'
-  | 'shield'
   | 'lock'
   | 'package'
   | 'puzzle'
@@ -160,7 +159,7 @@ const PATHS: Record<CanonicalIconName, ReactNode> = {
       <path d="M3 12h3.5l2-5 3.5 10 2.5-6 1.5 3h5" />
     </>
   ),
-  // A closed padlock. Not a shield: a shield claims protection, a lock states a setting.
+  // A closed padlock: a lock states a setting rather than claiming protection.
   security: (
     <>
       <rect x="4" y="10.5" width="16" height="10.5" rx="2" />
@@ -264,7 +263,6 @@ const ALIASES: Record<Exclude<IconName, CanonicalIconName>, CanonicalIconName> =
   'alert-triangle': 'traffic',
   'bar-chart': 'observability',
   pulse: 'observability',
-  shield: 'security',
   lock: 'security',
   package: 'platform',
   puzzle: 'platform',

@@ -80,7 +80,7 @@ export function CapabilityBadge({ capability }: { capability: Capability }): JSX
  * same way on every screen, and the one place that knows the whole picture is the collector that
  * made the reads. `detail` is the raw API message and sits below in a smaller voice — an RBAC denial
  * names the exact missing rule, which is the difference between "ask for access" and "add
- * `constraints.gatekeeper.sh` to the reader role".
+ * `cert-manager.io` to the reader role".
  */
 export function CapabilityNotice({
   capability,

@@ -119,7 +119,7 @@ export const NO_POD_FILTER: PodTableFilter = {
 /**
  * The CPU and Memory chips. The percentage is the one the meter prints beside the bar —
  * `ofRequestText`'s used ÷ summed request — so a chip never selects a row whose figure reads
- * outside it. Not % of limit: most pods on a Kyma cluster declare no CPU limit, and a band over
+ * outside it. Not % of limit: most pods on a typical cluster declare no CPU limit, and a band over
  * limits would drop them from every chip.
  *
  * Half-open bands, `[lo, hi)`: 25% is in 25–50, and `gt75` holds 75% and up, including a pod
@@ -228,7 +228,7 @@ export function usageBandCounts(pods: readonly InventoryPod[], metric: Metric): 
  * hiding on a guess would drop pods the operator has no way to know are missing.
  *
  * A namespace the operator selected explicitly is never hidden — arriving from the Namespaces table
- * on `kyma-system` must show kyma-system's pods, not an empty table under a toggle.
+ * on `platform-system` must show platform-system's pods, not an empty table under a toggle.
  */
 export function hiddenAsSystem(
   p: { namespace: string },
@@ -333,7 +333,7 @@ type Metric = 'cpu' | 'memory';
 /**
  * A pod's used / request / limit, as the meter reads them, summed over the containers that run for
  * the pod's whole life: the regular ones and the native sidecars (`restartPolicy: Always` init
- * containers — Istio's `istio-proxy` on Kyma). A run-to-completion init container is excluded.
+ * containers — Istio's `istio-proxy`). A run-to-completion init container is excluded.
  *
  * Summed here, not read from the pod: the pod's `cpuUsage`/`memoryUsage` is metrics-server's total
  * over every running container, sidecar included, while its `cpuRequest`/`cpuLimit` (`podResources`

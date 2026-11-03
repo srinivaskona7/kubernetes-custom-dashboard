@@ -6,7 +6,7 @@ import { lazy, Suspense } from 'react';
 import { SubTabs, useUrlSection } from '../../components/SubTabs';
 import { Skeleton } from '../../components/ui';
 import { TAB_SECTIONS } from './tabs';
-import { ObservabilitySection } from './ModulesIntegrityTab';
+import { ObservabilitySection } from './ObservabilitySection';
 
 const TracesTab = lazy(() => import('./TracesTab'));
 

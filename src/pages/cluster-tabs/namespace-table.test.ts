@@ -104,11 +104,11 @@ describe('namespaceTypeCounts', () => {
 describe('buildNamespaceTable', () => {
   it('keeps the namespace inventory on the left of the join and counts workloads, not pods', () => {
     const rows = buildNamespaceTable(
-      [ns('polls', 3), ns('kyma-demo', 0), ns('kube-system', 9, true)],
+      [ns('polls', 3), ns('demo', 0), ns('kube-system', 9, true)],
       [util('polls', { pods: 3 })],
       [wl('polls', 'a'), wl('polls', 'b', { kind: 'StatefulSet' })]
     );
-    expect(rows.map(r => r.namespace)).toEqual(['polls', 'kyma-demo', 'kube-system']);
+    expect(rows.map(r => r.namespace)).toEqual(['polls', 'demo', 'kube-system']);
     const polls = rows[0]!;
     expect(polls.workloads).toBe(2);
     expect(polls.usage.pods).toBe(3);
@@ -117,7 +117,7 @@ describe('buildNamespaceTable', () => {
   });
 
   it('a namespace with zero pods is Empty, not Healthy', () => {
-    const r = buildNamespaceTable([ns('kyma-demo', 0)], [], [])[0]!;
+    const r = buildNamespaceTable([ns('demo', 0)], [], [])[0]!;
     expect(r.status).toBe('empty');
   });
 
@@ -184,7 +184,7 @@ describe('buildNamespaceTable', () => {
 
 describe('resourceCell', () => {
   it('zero pods is "No pods", never a meter of zeros', () => {
-    const r = buildNamespaceTable([ns('kyma-demo', 0)], [], [])[0]!;
+    const r = buildNamespaceTable([ns('demo', 0)], [], [])[0]!;
     expect(resourceCell(r.usage)).toEqual({ kind: 'text', text: 'No pods', title: expect.any(String) });
   });
 
@@ -206,15 +206,15 @@ describe('resourceCell', () => {
 
 describe('filterNamespaceTable', () => {
   const rows = buildNamespaceTable(
-    [ns('applecare', 2), ns('polls', 1), ns('kyma-demo', 0), ns('kube-system', 9, true)],
-    [util('applecare'), util('polls', { memoryUsage: 380, memoryRequest: 320, memoryLimit: 1300 }), util('kube-system')],
-    [wl('applecare', 'a'), wl('polls', 'p'), wl('kube-system', 'k')]
+    [ns('acme-shop', 2), ns('polls', 1), ns('demo', 0), ns('kube-system', 9, true)],
+    [util('acme-shop'), util('polls', { memoryUsage: 380, memoryRequest: 320, memoryLimit: 1300 }), util('kube-system')],
+    [wl('acme-shop', 'a'), wl('polls', 'p'), wl('kube-system', 'k')]
   );
   const all: NamespaceTableFilter = { search: '', showSystem: true, type: 'all', status: 'all' };
   const names = (f: Partial<NamespaceTableFilter>) => filterNamespaceTable(rows, { ...all, ...f }).map(r => r.namespace);
 
   it('search matches the name, case-insensitively and trimmed', () => {
-    expect(names({ search: '  APPLE ' })).toEqual(['applecare']);
+    expect(names({ search: '  ACME ' })).toEqual(['acme-shop']);
     expect(names({ search: 'zzz' })).toEqual([]);
   });
 
@@ -236,7 +236,7 @@ describe('filterNamespaceTable', () => {
 
   it('type and status filters combine with search', () => {
     expect(names({ type: 'system' })).toEqual(['kube-system']);
-    expect(names({ status: 'empty' })).toEqual(['kyma-demo']);
+    expect(names({ status: 'empty' })).toEqual(['demo']);
     expect(names({ status: 'warning', type: 'application', search: 'po', showSystem: false })).toEqual(['polls']);
     expect(names({ type: 'other' })).toEqual([]);
   });
@@ -262,7 +262,7 @@ describe('withShowSystem', () => {
   });
 
   it('keeps every other filter', () => {
-    expect(withShowSystem(f({ search: 'kyma', status: 'warning' }), true)).toEqual(f({ search: 'kyma', status: 'warning', showSystem: true }));
+    expect(withShowSystem(f({ search: 'platform', status: 'warning' }), true)).toEqual(f({ search: 'platform', status: 'warning', showSystem: true }));
   });
 
   it('reads as ticked under Type = System, and unticking it leaves System for All', () => {

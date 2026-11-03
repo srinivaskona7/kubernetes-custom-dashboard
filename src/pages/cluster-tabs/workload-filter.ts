@@ -19,7 +19,7 @@
  *
  * Requirement 7 — the pill and the namespace control must both keep working — is satisfied by
  * composition rather than by a combined predicate: `filterWorkloads` is `matchesKind` and
- * `matchesNamespace`, each usable alone, so requirement 8's example (Deployments + `applecare`) is
+ * `matchesNamespace`, each usable alone, so requirement 8's example (Deployments + `acme-shop`) is
  * the same rows in either order. A test asserts that order-independence, because a single fused
  * predicate is exactly the shape that can silently prefer one filter over the other.
  *
@@ -155,7 +155,7 @@ export interface WorkloadPillCounts {
  *
  * `pods` counts the deduplicated inventory rows rather than summing `w.pods.length`, because the
  * deduplicated rows are what the Pods table renders. The sum counts a pod once per workload whose
- * selector claimed it, so on a cluster with overlapping selectors — `kyma-system` has them — the
+ * selector claimed it, so on a cluster with overlapping selectors — `platform-system` has them — the
  * pill promised more rows than the table could show.
  */
 export function workloadPillCounts(

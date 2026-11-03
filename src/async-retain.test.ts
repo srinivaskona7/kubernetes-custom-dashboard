@@ -8,7 +8,7 @@ describe('keepsDataAcrossKeyChange', () => {
   });
 
   it('blanks when the subject changed: another cluster must never show the previous one’s rows', () => {
-    expect(keepsDataAcrossKeyChange('platform-sbx', 'appkymadv')).toBe(false);
+    expect(keepsDataAcrossKeyChange('platform-sbx', 'app-dev')).toBe(false);
   });
 
   it('blanks when the caller named no subject, the hook’s original contract', () => {

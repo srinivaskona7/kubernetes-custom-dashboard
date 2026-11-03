@@ -1,7 +1,7 @@
 /**
  * Flattening the workloads payload into a pod inventory, and what the Owner column may claim.
  *
- * The regression these pin is a real one from `platform-sbx`: three Deployments in `kyma-system`
+ * The regression these pin is a real one from `platform-sbx`: three Deployments in `platform-system`
  * share the selector `control-plane: controller-manager`, so the pod
  * `istio-controller-manager-79bd8f969f-d8bmw` is claimed by `application-connector-controller-manager`,
  * `istio-controller-manager` and `kim-snatch-controller-manager`. The table named the first of

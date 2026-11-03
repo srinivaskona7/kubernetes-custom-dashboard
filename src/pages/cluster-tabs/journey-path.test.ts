@@ -6,7 +6,7 @@ const n = (over: Partial<JourneyPathNode>): JourneyPathNode => ({
   id: 'x',
   kind: 'workload',
   label: 'srv-1',
-  namespace: 'applecare',
+  namespace: 'acme-shop',
   pod: 'srv-1',
   ...over
 });
@@ -15,7 +15,7 @@ const PATH: JourneyPath = {
     n({ id: 'edge', kind: 'edge', label: 'Load balancer' }),
     n({ id: 'g', kind: 'gateway', label: 'istio-ingressgateway-1', code: 200, codeClass: 'ok', durationMs: 42, upstreamMs: 40, proxyOverheadMs: 2 }),
     n({ id: 's', code: 200, codeClass: 'ok', durationMs: 35, upstreamMs: 33, proxyOverheadMs: 2 }),
-    n({ id: 'e', kind: 'external', label: 'SAP HANA Cloud · us10', seen: false, openForMs: null, reason: 'connection reused, no line in this window' })
+    n({ id: 'e', kind: 'external', label: 'Managed Postgres · us10', seen: false, openForMs: null, reason: 'connection reused, no line in this window' })
   ],
   edges: [
     { from: 'edge', to: 'g', link: 'exact', candidates: 1, transitMs: null },
@@ -36,7 +36,7 @@ describe('path view', () => {
     expect(linkLine({ from: 'a', to: 'b', link: 'inferred', candidates: 1, transitMs: null })).toBe('inferred · 1 of 1');
     expect(linkLine({ from: 'a', to: 'b', link: 'exact', candidates: 1, transitMs: 1 })).toBe('exact · transit 1ms');
   });
-  it('a declared-but-unseen BTP node never reads as "1 of 0"', () => {
+  it('a declared-but-unseen external node never reads as "1 of 0"', () => {
     expect(linkLine({ from: 's', to: 'e', link: 'inferred', candidates: 0, transitMs: null })).toBe('declared, not observed');
   });
   it('an external node never says ms', () => {
@@ -72,14 +72,14 @@ describe('path view', () => {
       label: 'Load balancer',
       edge: {
         lb: { type: 'LoadBalancer', hostname: 'my-lb.elb.amazonaws.com', addressOnly: false, externalTrafficPolicy: 'Local', sourceRangesCount: 0 },
-        gateways: [{ namespace: 'istio-system', name: 'kyma-gateway', servers: [{ hosts: ['*.c.example.com'], tlsMode: 'SIMPLE', credentialName: 'kyma-tls' }] }]
+        gateways: [{ namespace: 'istio-system', name: 'main-gateway', servers: [{ hosts: ['*.c.example.com'], tlsMode: 'SIMPLE', credentialName: 'main-tls' }] }]
       }
     });
     const lines = edgeFactLines(edgeNode);
     expect(lines).toContain('LoadBalancer · my-lb.elb.amazonaws.com');
     expect(lines).toContain('externalTrafficPolicy: Local');
     expect(lines).toContain('0 source ranges configured');
-    expect(lines).toContain('kyma-gateway: *.c.example.com (SIMPLE, kyma-tls)');
+    expect(lines).toContain('main-gateway: *.c.example.com (SIMPLE, main-tls)');
   });
   it('an LB given only an address says so, never the address itself', () => {
     const lines = edgeFactLines(n({ id: 'edge', kind: 'edge', label: 'Load balancer', edge: { lb: { type: 'LoadBalancer', hostname: null, addressOnly: true, externalTrafficPolicy: null, sourceRangesCount: null }, gateways: null } }));

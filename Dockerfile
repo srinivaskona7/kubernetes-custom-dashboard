@@ -1,67 +1,64 @@
 # syntax=docker/dockerfile:1
+#
+# Public images only — no corporate registry, no private base layers.
+# Works unchanged on EKS, AKS, GKE, kind and bare-metal clusters.
 
-# Build Stage — install deps, build React + TypeScript frontend
-FROM docker.apple.com/base-images/ubi9/node22-builder:latest AS build
+# ─────────────────────────────────────────────────────────────────────────────
+# Build stage — install deps, build the React + TypeScript frontend.
+#
+# better-sqlite3 is a native addon. It is compiled here so the loadable binding
+# is produced against the same musl toolchain the runtime stage uses; the build
+# tools themselves are not carried into the final image.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM node:26-alpine AS build
 WORKDIR /app
 
-COPY .npmrc ./
-COPY package*.json ./
+RUN apk add --no-cache python3 make g++
 
-# Install all deps (need devDependencies for vite build)
-RUN npm ci --registry=https://npm.apple.com
+COPY package.json package-lock.json ./
+RUN npm ci
 
+COPY tsconfig.json vite.config.js index.html ./
 COPY src/ ./src/
-COPY index.html ./
-COPY vite.config.js ./
-COPY tsconfig.json ./
 COPY server/ ./server/
 
-# Build frontend with /btp-kyma-fleet-dashboard/ base path for production
-RUN VITE_BASE_PATH=/btp-kyma-fleet-dashboard/ npx vite build
+# Empty base path: the app is served from the root of the Ingress/host.
+# Override at build time for a sub-path deployment, e.g.
+#   --build-arg VITE_BASE_PATH=/fleet-dashboard/
+ARG VITE_BASE_PATH=/
+ENV VITE_BASE_PATH=$VITE_BASE_PATH
+RUN npm run build
 
-# Prune devDependencies for runtime
+# Drop devDependencies so the runtime layer carries only what the server loads.
 RUN npm prune --omit=dev
 
-# Runtime Stage — minimal image, non-root user
-FROM docker.apple.com/base-images/ubi9-minimal/node22-runtime:latest
+# ─────────────────────────────────────────────────────────────────────────────
+# Runtime stage — minimal, non-root, health-checked.
+# ─────────────────────────────────────────────────────────────────────────────
+FROM node:26-alpine AS runtime
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV PORT=3001
+ENV NODE_ENV=production \
+    PORT=3001 \
+    DB_PATH=/app/data/app.db
 
-ENV http_proxy="http://proxy.config.pcp.local:3128/"
-ENV https_proxy="http://proxy.config.pcp.local:3128/"
-ENV HTTP_PROXY="http://proxy.config.pcp.local:3128/"
-ENV HTTPS_PROXY="http://proxy.config.pcp.local:3128/"
-ENV NO_PROXY="0.0.0.0,localhost,127.0.0.1,172.31.94.0/24,172.31.80.0/22,172.31.84.0/22,172.18.100.0/23,100.120.57.160/27,172.31.93.0/24,172.18.104.0/23,100.120.89.160/27,172.18.102.0/23,172.31.88.0/22,100.120.73.160/27,172.31.92.0/24,.internal,.apple.com"
-ENV no_proxy="0.0.0.0,localhost,127.0.0.1,172.31.94.0/24,172.31.80.0/22,172.31.84.0/22,172.18.100.0/23,100.120.57.160/27,172.31.93.0/24,172.18.104.0/23,100.120.89.160/27,172.18.102.0/23,172.31.88.0/22,100.120.73.160/27,172.31.92.0/24,.internal,.apple.com"
+# The `node` user (uid 1000) ships with the official image. Create the writable
+# directories it needs and hand them over before dropping privileges.
+RUN mkdir -p /app/data /logs \
+ && chown -R node:node /app/data /logs
 
-USER root
-RUN mkdir -p /logs && chown $NON_ROOT_USER:$NON_ROOT_USER /logs
-# SQLite data dir — the PVC (chart persistence) mounts over this at runtime;
-# create + chown it here so the dir also exists (and is writable) without a PVC.
-RUN mkdir -p /app/data && chown $NON_ROOT_USER:$NON_ROOT_USER /app/data
-USER $NON_ROOT_USER
+COPY --from=build --chown=node:node /app/node_modules ./node_modules
+COPY --from=build --chown=node:node /app/package.json ./package.json
+COPY --from=build --chown=node:node /app/dist ./dist
+COPY --from=build --chown=node:node /app/server ./server
+COPY --chown=node:node config/ ./config/
 
-# Copy production node_modules and server code (server/fleet/clusters.json, the baked
-# cluster registry, travels with server/).
-# better-sqlite3 is a native module compiled in the build stage against the same
-# UBI9 node22 base-image family, so the binding carries over unchanged.
-COPY --chown=$NON_ROOT_USER:$NON_ROOT_USER --from=build /app/node_modules ./node_modules
-COPY --chown=$NON_ROOT_USER:$NON_ROOT_USER --from=build /app/package.json ./package.json
-COPY --chown=$NON_ROOT_USER:$NON_ROOT_USER --from=build /app/server ./server
-
-# Copy built frontend
-COPY --chown=$NON_ROOT_USER:$NON_ROOT_USER --from=build /app/dist ./dist
-
-# Copy seed data — loadDb() seeds the SQLite books table from it when empty
-COPY --chown=$NON_ROOT_USER:$NON_ROOT_USER config/ ./config/
-
-# Copy entrypoint
-COPY --chown=$NON_ROOT_USER:$NON_ROOT_USER entrypoint.sh ./entrypoint.sh
-RUN chmod +x ./entrypoint.sh
+USER node
 
 EXPOSE 3001
 
-ENTRYPOINT ["./entrypoint.sh"]
+# Node is the only interpreter guaranteed to exist in this image; no curl/wget.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 CMD ["node", "server/index.js"]

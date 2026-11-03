@@ -10,7 +10,7 @@
  *
  *   1. probe        — GET /version, so an unreachable cluster or a dead credential fails
  *                     in one second with a clear message instead of half-onboarding.
- *   2. namespace    — create kyma-fleet if absent.
+ *   2. namespace    — create fleet-dashboard if absent.
  *   3. account      — create the fleet-reader ServiceAccount if absent.
  *   4. clusterrole  — create/replace the read-only ClusterRole.
  *   5. binding      — bind the account to it.
@@ -29,10 +29,10 @@ const { call } = k8sModule;
 import errorsModule from './errors.js';
 const { ClusterError } = errorsModule;
 
-const FLEET_NAMESPACE = 'kyma-fleet';
+const FLEET_NAMESPACE = 'fleet-dashboard';
 const FLEET_SA = 'fleet-reader';
-const CLUSTER_ROLE = 'kyma-fleet-reader';
-const SELF_MINT_ROLE = 'kyma-fleet-token-issuer';
+const CLUSTER_ROLE = 'fleet-dashboard-reader';
+const SELF_MINT_ROLE = 'fleet-dashboard-token-issuer';
 const FIRST_TOKEN_SECONDS = 24 * 60 * 60;
 
 /**
@@ -84,7 +84,7 @@ function readOnlyRules() {
      *
      * `update`/`patch` were granted here once for "rotation" and are removed: nothing on a
      * MANAGED cluster ever writes a Secret. The fleet's own token and cluster records live in
-     * `kyma-fleet-tokens`/`kyma-fleet-clusters` on the HUB cluster, and `secret-writer.js`
+     * `fleet-dashboard-tokens`/`fleet-dashboard-clusters` on the HUB cluster, and `secret-writer.js`
      * reaches them with the POD's service-account token against
      * `https://kubernetes.default.svc` — never with a managed cluster's fleet-reader token.
      * Granting write on every Secret in every namespace of every onboarded cluster bought
@@ -255,7 +255,7 @@ function readOnlyRules() {
 /**
  * There is no second ClusterRole. `readOnlyRules()` above is the whole grant.
  *
- * A `kyma-fleet-rollout` role used to live here, created on demand when an onboarding request
+ * A `fleet-dashboard-rollout` role used to live here, created on demand when an onboarding request
  * carried `allowRollout: true`, and it granted `patch` on Deployments, StatefulSets and the
  * three `/scale` subresources. It is removed, because by the time it was audited it had become
  * the worst possible shape for a grant: nothing consumed it and anything could ask for it.
@@ -292,8 +292,8 @@ async function apply({ cluster, token, collectionPath, name, object, callFn = ca
 }
 
 const labels = {
-  'app.kubernetes.io/managed-by': 'kyma-fleet-dashboard',
-  'app.kubernetes.io/part-of': 'kyma-fleet'
+  'app.kubernetes.io/managed-by': 'k8s-fleet-dashboard',
+  'app.kubernetes.io/part-of': 'fleet-dashboard'
 };
 
 /**

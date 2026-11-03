@@ -15,7 +15,7 @@
  * ## Read-only
  *
  * Every affordance here navigates or copies. There is no action menu, no overflow menu, and no
- * write of any kind — Kyma Fleet must never change cluster state, and the drawer is the surface
+ * write of any kind — this dashboard must never change cluster state, and the drawer is the surface
  * where a "convenient" Delete would most plausibly have been added.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -388,7 +388,7 @@ export function RelatedInvestigationLinks({ steps }: { steps: InvestigationStep[
 
 /**
  * The Related panel — how an investigation moves. A Deployment leads to its Pods, a Pod to its
- * Node and its containers, an APIRule to its backing Service.
+ * Node and its containers, an Ingress or HTTPRoute to its backing Service.
  *
  * Grouped by relation so that a workload with forty pods reads as one "Pod" heading rather than
  * forty repetitions of the word, and each group is capped: past a couple of dozen entries the

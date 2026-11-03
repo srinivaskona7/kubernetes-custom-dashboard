@@ -54,7 +54,7 @@ describe('readPref', () => {
 
   it('falls back to system rather than trusting a hand-edited value', () => {
     const s = fakeStorage();
-    s.map.set('kyma-fleet:theme', 'solarized');
+    s.map.set('k8s-fleet:theme', 'solarized');
     install(s);
     expect(readPref()).toBe('system');
   });
@@ -70,9 +70,9 @@ describe('readPref', () => {
     const s = fakeStorage();
     install(s);
     writePref('dark');
-    expect(s.map.has('kyma-fleet:theme')).toBe(true);
+    expect(s.map.has('k8s-fleet:theme')).toBe(true);
     writePref('system');
-    expect(s.map.has('kyma-fleet:theme')).toBe(false);
+    expect(s.map.has('k8s-fleet:theme')).toBe(false);
   });
 });
 

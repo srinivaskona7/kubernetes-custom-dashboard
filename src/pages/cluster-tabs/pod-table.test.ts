@@ -106,32 +106,32 @@ describe('phaseBucket and podSummaryCounts', () => {
 });
 
 describe('system toggle', () => {
-  const sys = new Set(['kyma-system']);
+  const sys = new Set(['platform-system']);
 
   it('hides system pods by default and shows them when asked', () => {
-    const p = pod({ namespace: 'kyma-system' });
+    const p = pod({ namespace: 'platform-system' });
     expect(hiddenAsSystem(p, sys, false, NONE)).toBe(true);
     expect(hiddenAsSystem(p, sys, true, NONE)).toBe(false);
   });
 
   it('never hides a namespace the operator selected — the drilldown from Namespaces', () => {
-    expect(hiddenAsSystem(pod({ namespace: 'kyma-system' }), sys, false, new Set(['kyma-system']))).toBe(false);
+    expect(hiddenAsSystem(pod({ namespace: 'platform-system' }), sys, false, new Set(['platform-system']))).toBe(false);
   });
 
   it('hides nothing while the classification is unknown', () => {
-    expect(hiddenAsSystem(pod({ namespace: 'kyma-system' }), null, false, NONE)).toBe(false);
+    expect(hiddenAsSystem(pod({ namespace: 'platform-system' }), null, false, NONE)).toBe(false);
   });
 
   it('podsInScope is the one scope the counter and the table share: namespace, then system', () => {
-    const rows = [pod({ namespace: 'kyma-system' }), pod({ namespace: 'applecare' }), pod({ namespace: 'polls' })];
-    expect(podsInScope(rows, NONE, sys, false).map(r => r.namespace)).toEqual(['applecare', 'polls']);
+    const rows = [pod({ namespace: 'platform-system' }), pod({ namespace: 'acme-shop' }), pod({ namespace: 'polls' })];
+    expect(podsInScope(rows, NONE, sys, false).map(r => r.namespace)).toEqual(['acme-shop', 'polls']);
     expect(podsInScope(rows, NONE, sys, true)).toHaveLength(3);
-    expect(podsInScope(rows, new Set(['kyma-system']), sys, false).map(r => r.namespace)).toEqual(['kyma-system']);
+    expect(podsInScope(rows, new Set(['platform-system']), sys, false).map(r => r.namespace)).toEqual(['platform-system']);
   });
 
   it('scopePods keeps application pods', () => {
-    const rows = scopePods([pod({ namespace: 'kyma-system' }), pod({ namespace: 'applecare' })], sys, false, NONE);
-    expect(rows.map(r => r.namespace)).toEqual(['applecare']);
+    const rows = scopePods([pod({ namespace: 'platform-system' }), pod({ namespace: 'acme-shop' })], sys, false, NONE);
+    expect(rows.map(r => r.namespace)).toEqual(['acme-shop']);
   });
 });
 

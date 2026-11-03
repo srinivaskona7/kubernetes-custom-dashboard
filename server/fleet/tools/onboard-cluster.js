@@ -36,12 +36,12 @@
  *   --duration <d>        first token lifetime          (default 24h)
  *   --dry-run             print every command and every record, change nothing
  *
- * Object names default to kyma-fleet / fleet-reader / kyma-fleet-reader and are all
+ * Object names default to fleet-dashboard / fleet-reader / fleet-dashboard-reader and are all
  * overridable, because a cluster's owner may have a naming convention:
  *
  *   --prefix <p>          renames the RBAC objects together: <p>-reader,
  *                         <p>-token-issuer
- *   --namespace <ns>      namespace holding the service account   (default kyma-fleet)
+ *   --namespace <ns>      namespace holding the service account   (default fleet-dashboard)
  *   --sa <name>           the service account itself              (default fleet-reader)
  *
  * With any of those set the bundle is generated from print-rbac.js and applied over
@@ -68,8 +68,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO = path.resolve(__dirname, '..', '..', '..');
 const DEFAULT_DURATION = `${FIRST_TOKEN_SECONDS / 3600}h`;
 const DEFAULT_HUB_NAMESPACE = 'btp-platform-foundation';
-const TOKENS_SECRET = 'kyma-fleet-tokens';
-const CLUSTERS_SECRET = 'kyma-fleet-clusters';
+const TOKENS_SECRET = 'fleet-dashboard-tokens';
+const CLUSTERS_SECRET = 'fleet-dashboard-clusters';
 /** Same rule the registry enforces. The id becomes a filename, so a bad one is traversal. */
 const ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,62}$/;
 

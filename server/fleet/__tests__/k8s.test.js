@@ -101,7 +101,7 @@ test('the bearer token and method reach the server intact', { skip }, async () =
   try {
     const cluster = { id: 'platformsbx', apiUrl: srv.url, caFile: TLS.cert };
     await call({
-      cluster, token: 'eyJ-abc', path: '/api/v1/namespaces/kyma-fleet/serviceaccounts/fleet-reader/token',
+      cluster, token: 'eyJ-abc', path: '/api/v1/namespaces/fleet-dashboard/serviceaccounts/fleet-reader/token',
       method: 'POST', body: { kind: 'TokenRequest' }
     });
     assert.strictEqual(seen.auth, 'Bearer eyJ-abc');
@@ -353,7 +353,7 @@ test('every request identifies the dashboard to the apiserver audit log', async 
   const transport = fakeTransport([{ status: 200, body: {} }]);
   await call({ cluster: CLUSTER, token: 't', path: '/x', transport });
   assert.strictEqual(transport.seen[0].headers['User-Agent'], USER_AGENT);
-  assert.match(transport.seen[0].headers['User-Agent'], /^kyma-fleet-dashboard\/\d+\.\d+\.\d+/);
+  assert.match(transport.seen[0].headers['User-Agent'], /^k8s-fleet-dashboard\/\d+\.\d+\.\d+/);
 });
 
 test('a 429 with Retry-After in seconds is obeyed, and the retry succeeds', async () => {
@@ -434,7 +434,7 @@ test('three consecutive 429s give up with a typed RATE_LIMITED', async () => {
 test('a 403 is a decision, not a delay, and is never retried', async () => {
   const sleep = fakeSleep();
   const transport = fakeTransport(() => ({
-    status: 403, body: { message: 'nodes is forbidden: User "system:serviceaccount:kyma-fleet:fleet-reader" cannot list' }
+    status: 403, body: { message: 'nodes is forbidden: User "system:serviceaccount:fleet-dashboard:fleet-reader" cannot list' }
   }));
 
   await assert.rejects(call({ cluster: CLUSTER, token: 't', path: '/api/v1/nodes', transport, sleep }), err => {
@@ -497,7 +497,7 @@ test('a throttled mutation is never replayed', async () => {
 
   await assert.rejects(call({
     cluster: CLUSTER, token: 't',
-    path: '/api/v1/namespaces/kyma-fleet/serviceaccounts/fleet-reader/token',
+    path: '/api/v1/namespaces/fleet-dashboard/serviceaccounts/fleet-reader/token',
     method: 'POST', body: { kind: 'TokenRequest' }, transport, sleep
   }), err => {
     assert.strictEqual(err.code, RATE_LIMITED, 'still typed, so the UI can say "busy" rather than "broken"');

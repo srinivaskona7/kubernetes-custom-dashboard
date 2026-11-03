@@ -78,13 +78,13 @@ test('an unseeded cluster reports the seeding command instead of a timeout', asy
     registry, tokens: fakeTokens({}), collect: async () => ({})
   });
   assert.strictEqual(result.error.code, 'UNSEEDED');
-  assert.match(result.error.message, /kubectl create token fleet-reader -n kyma-fleet --duration=24h/);
+  assert.match(result.error.message, /kubectl create token fleet-reader -n fleet-dashboard --duration=24h/);
 });
 
 test('the cluster object sent to the browser carries no credential fields', () => {
   const pub = publicCluster({
     id: 'platformsbx', displayName: 'x', env: 'sbx', apiUrl: 'https://a',
-    namespace: 'kyma-fleet', serviceAccount: 'fleet-reader', enabled: true,
+    namespace: 'fleet-dashboard', serviceAccount: 'fleet-reader', enabled: true,
     caFile: '/etc/ca.crt', secretRef: 'should-not-appear'
   });
   assert.ok(!('secretRef' in pub));
@@ -230,7 +230,7 @@ test('the registry rejects an id that could escape the token mount', () => {
 test('the registry defaults the fleet namespace and service account', () => {
   const r = new Registry({ clusters: [{ id: 'platformsbx', apiUrl: 'https://a/' }] });
   const c = r.get('platformsbx');
-  assert.strictEqual(c.namespace, 'kyma-fleet');
+  assert.strictEqual(c.namespace, 'fleet-dashboard');
   assert.strictEqual(c.serviceAccount, 'fleet-reader');
   assert.strictEqual(c.apiUrl, 'https://a', 'trailing slash trimmed so path joins stay clean');
   assert.strictEqual(c.enabled, true);

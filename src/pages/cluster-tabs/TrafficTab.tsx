@@ -800,7 +800,7 @@ export default function TrafficTab({
       {/* ------------------------------------------------ the access-log verdict, before any count */}
       {/*
         The banner fires on "this tab cannot see the requests", which is wider than "logging is
-        off" in two directions. A mesh pointed at `kyma-logs` is `state: 'on'` and shows nothing
+        off" in two directions. A mesh pointed at `otel-logs` is `state: 'on'` and shows nothing
         here (`readsSkipped`); and a provider that resolved to nothing leaves `readable: null`, so
         the read is rightly NOT skipped but the zero it produces is still unproven. The original
         condition (`state !== 'on'`) stayed silent for both.
@@ -924,7 +924,7 @@ export default function TrafficTab({
           status={scope.of('telemetries', 'istio-mesh-config')}
           value={
             /*
-              `on` alone was the wrong pill for a mesh logging to `kyma-logs`: green, accurate,
+              `on` alone was the wrong pill for a mesh logging to `otel-logs`: green, accurate,
               and read by an operator as "so the empty table below means no failures". The pill
               now reports what this tab can see, which is the question the rest of the page
               answers — the destination is one row down in Proxies read.
@@ -1054,7 +1054,7 @@ export default function TrafficTab({
                     empty={
                       /*
                         `readsSkipped` is checked before `state === 'on'`, and the order is the
-                        whole point. Access logging is genuinely on in the `kyma-logs` case — it is
+                        whole point. Access logging is genuinely on in the `otel-logs` case — it is
                         just on somewhere else — so the `on` branch would otherwise print "No 4xx,
                         5xx or unanswered connection in the window that was read" about a window
                         that was never read. An empty table is allowed to say a cluster is clean
@@ -1235,7 +1235,7 @@ export default function TrafficTab({
                           <div key={d} title="response_code_details — Envoy's own account of why it produced this code.">{d}</div>
                         ))}
                         {selected.transportFailures.map(d => (
-                          <div key={d} className="text-bad" title="upstream_transport_failure_reason — the connection to the upstream itself failed. Kyma's stock mesh maps this field to %CONNECTION_TERMINATION_DETAILS% instead, so on that mesh it carries the termination detail and is dropped here rather than shown twice under a heading promising something else. A value reaching this row therefore came from a mesh that maps the field as named.">{d}</div>
+                          <div key={d} className="text-bad" title="upstream_transport_failure_reason — the connection to the upstream itself failed. Some meshes map this field to %CONNECTION_TERMINATION_DETAILS% instead, so on that mesh it carries the termination detail and is dropped here rather than shown twice under a heading promising something else. A value reaching this row therefore came from a mesh that maps the field as named.">{d}</div>
                         ))}
                         {selected.responseFlags.length > 0 && (
                           <div className="text-muted" title="response_flags — Envoy's short codes: UF upstream connection failure, UH no healthy upstream, URX retry limit, DC downstream disconnect, DPE codec error, NR no route.">

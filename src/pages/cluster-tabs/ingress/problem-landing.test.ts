@@ -122,11 +122,11 @@ describe('hostFocus', () => {
 
 describe('clientsFocus', () => {
   const a = access({
-    policies: [{ namespace: 'istio-system', name: 'apple-acl', action: 'ALLOW', selector: null, remoteIpBlocks: 3, rules: 1, denied: 283 }],
+    policies: [{ namespace: 'istio-system', name: 'edge-acl', action: 'ALLOW', selector: null, remoteIpBlocks: 3, rules: 1, denied: 283 }],
     deniedByHost: [{ host: 'a.example.com', count: 12 }]
   });
   test('a refusing policy selects its row in AuthorizationPolicies', () => {
-    expect(clientsFocus(a, { text: 'apple-acl' })).toEqual({ table: 'policies', key: 'istio-system/apple-acl' });
+    expect(clientsFocus(a, { text: 'edge-acl' })).toEqual({ table: 'policies', key: 'istio-system/edge-acl' });
   });
   test('a refused host selects its row in Denied by host', () => {
     expect(clientsFocus(a, { host: 'a.example.com' })).toEqual({ table: 'denied', key: 'a.example.com' });
@@ -165,8 +165,8 @@ describe('landingParams', () => {
 
 describe('problemsUnreadWhy', () => {
   test('names the read that each unavailable strip is missing', () => {
-    const why = problemsUnreadWhy({ ingress: ingressWith({}), edgeRead: true, notReadWhy: 'the access log goes to kyma-logs' });
-    expect(why.failures).toBe('the access log goes to kyma-logs');
+    const why = problemsUnreadWhy({ ingress: ingressWith({}), edgeRead: true, notReadWhy: 'the access log goes to otel-logs' });
+    expect(why.failures).toBe('the access log goes to otel-logs');
     expect(why.ingress).toMatch(/^The attention list is not reported by this server/);
     expect(why.hosts).toBe(why.ingress);
     expect(why.gateway).toBe(why.ingress);

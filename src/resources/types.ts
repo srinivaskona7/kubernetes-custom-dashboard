@@ -1,7 +1,7 @@
 /**
  * The resource-centric layer's vocabulary.
  *
- * One `ResourceRef` addresses any Kubernetes or Kyma object in the console, and one registry
+ * One `ResourceRef` addresses any Kubernetes object in the console, and one registry
  * entry per Kind says how to render it. The point is stated in the product spec as "do not
  * create five different Deployment detail implementations": a Deployment reached from the
  * Overview, from Reliability, from a Helm release's resource list and from search must open the
@@ -28,7 +28,8 @@ export type ResourceKind =
   | 'Node'
   | 'Service'
   | 'Ingress'
-  | 'APIRule'
+  | 'Gateway'
+  | 'HTTPRoute'
   | 'VirtualService'
   | 'HorizontalPodAutoscaler'
   | 'CronJob'

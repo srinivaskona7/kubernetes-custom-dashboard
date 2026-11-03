@@ -1,7 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
-import { getWhisperSecret } from './lib/whisper.js';
 import { getLogger } from './logger.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -33,17 +32,27 @@ export function validateBooks(books) {
   return books;
 }
 
-export async function loadWhisper() {
-  const log = getLogger();
-  const secretName = process.env.WHISPER_SECRET_NAME || 'btp-kyma-fleet-dashboard-prod';
-  const namespace = process.env.WHISPER_NAMESPACE || 'btp-pltform-security';
+const DEFAULT_APP_CONFIG_FILE = '/etc/fleet-dashboard/config.json';
 
+// Optional deployment config, mounted from a ConfigMap at APP_CONFIG_FILE. Absent is normal, and
+// unreadable or malformed is logged and treated the same: a bad config file must not stop the
+// server from starting. Never throws.
+export async function loadAppConfig(env = process.env) {
+  const log = getLogger();
+  const path = env.APP_CONFIG_FILE || DEFAULT_APP_CONFIG_FILE;
+  let raw;
   try {
-    const raw = await getWhisperSecret(secretName, namespace);
-    log.info({ secretName, namespace }, 'Whisper secret loaded');
-    return raw;
+    raw = await readFile(path, 'utf-8');
   } catch (err) {
-    log.warn({ err: err.message }, 'Whisper unavailable, continuing without it');
+    if (err.code !== 'ENOENT') log.warn({ path, err: err.message }, 'App config unreadable, continuing without it');
+    return null;
+  }
+  try {
+    const config = JSON.parse(raw);
+    log.info({ path }, 'App config loaded');
+    return config;
+  } catch (err) {
+    log.warn({ path, err: err.message }, 'App config is not valid JSON, continuing without it');
     return null;
   }
 }

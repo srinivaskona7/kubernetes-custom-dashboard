@@ -42,7 +42,7 @@ export function Step({
  * One row of the Detected panel: label above value, not beside it.
  *
  * A fixed label column left ~164px for the value inside a 340px rail, which broke an API server
- * URL over three lines mid-token — `https://api.c-77aa9` / `31.kyma.ondemand.co` / `m`. This panel
+ * URL over three lines mid-token — `https://api.c-77aa9` / `31.example.co` / `m`. This panel
  * exists so an operator can confirm they pasted the right cluster, and a shoot id split across a
  * line wrap is exactly the thing they cannot verify at a glance. Stacking gives the value the full
  * width at every breakpoint, and the label costs one 14px line.

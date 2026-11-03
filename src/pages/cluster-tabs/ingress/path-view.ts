@@ -129,7 +129,7 @@ export function ingressHops(path: IngressNetworkPath): PathHop[] {
     reason: null
   });
 
-  const dnsWhy = 'Gardener DNSEntries publish the cluster names onto the load balancer hostname.';
+  const dnsWhy = 'DNS entries publish the cluster names onto the load balancer hostname.';
   if (ingress.dns === null) {
     hops.push(unread('dns', 'Public DNS', dnsWhy, 'DNSEntries could not be read'));
   } else if (!ingress.dns.length) {
@@ -254,14 +254,14 @@ export function ingressHops(path: IngressNetworkPath): PathHop[] {
   const routeCount = ingress.routes;
   hops.push(
     routeCount === null
-      ? unread('routes', 'Routes', routesWhy, 'VirtualServices or APIRules could not be read')
+      ? unread('routes', 'Routes', routesWhy, 'VirtualServices, Ingresses or HTTPRoutes could not be read')
       : {
           id: 'routes',
           title: 'Routes',
           facts: [{ label: 'Routes', value: String(routeCount) }],
           why: routesWhy,
           state: routeCount === 0 ? 'warn' : 'ok',
-          reason: routeCount === 0 ? 'No VirtualService or APIRule routes through the gateway' : null
+          reason: routeCount === 0 ? 'No VirtualService, Ingress or HTTPRoute routes through the gateway' : null
         }
   );
 

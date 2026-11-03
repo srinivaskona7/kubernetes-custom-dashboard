@@ -273,7 +273,7 @@ export function IngressGateway({ ingress }: { ingress: TrafficIngress | undefine
       <IngressCard
         title="DNSEntries"
         label={ingress?.dnsEntries && !ingress.dnsEntries.unavailable ? String(ingress.dnsEntries.items.length) : undefined}
-        hint="Gardener DNSEntries: the names published onto the load balancer. A host with no DNSEntry is reachable only by whoever set its DNS by hand."
+        hint="DNS entries: the names published onto the load balancer. A host with no DNS entry is reachable only by whoever set its DNS by hand."
       >
         {dnsGap ? (
           <ReadGap status={dnsGap} />

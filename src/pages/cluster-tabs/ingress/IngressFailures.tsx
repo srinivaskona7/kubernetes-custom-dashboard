@@ -482,9 +482,9 @@ const CLASS_WHY: Record<string, string> = {
 const CODE_MEANING: Record<number, string> = {
   0: 'The connection closed before any response was written. At the edge this is almost always a TLS handshake that matched no filter chain — see the Hosts & TLS screen for which SNI names were offered.',
   400: 'Envoy could not parse the request. At a public listener this is overwhelmingly scanners and probes speaking something that is not HTTP; the DPE response flag beside it is the confirmation.',
-  401: 'Authentication was required and was missing or failed. Produced by the gateway, not the workload, so the request never reached the service — check the APIRule or AuthorizationPolicy that declares the requirement.',
+  401: 'Authentication was required and was missing or failed. Produced by the gateway, not the workload, so the request never reached the service — check the RequestAuthentication or AuthorizationPolicy that declares the requirement.',
   403: 'Authenticated but not permitted, or refused outright by an authorisation policy. Envoy adds UAEX when an ext_authz filter made the call. A large steady count against one host is a policy working against something that keeps asking, not an outage.',
-  404: 'No route matched the host and path. The Gateway admitted the name but nothing published a route for that path — the Hosts & TLS screen shows which VirtualService or APIRule, if any, declares this host.',
+  404: 'No route matched the host and path. The Gateway admitted the name but nothing published a route for that path — the Hosts & TLS screen shows which VirtualService, Ingress or HTTPRoute, if any, declares this host.',
   429: 'Rate-limited before reaching the upstream. The limit is declared in the mesh, so the number to compare it against is the request count for the same host.',
   500: 'The upstream returned it. Envoy passed it through unchanged, so the fault is in the workload, not at the edge.',
   502: 'The upstream answered in a way Envoy could not use, or the connection to it broke mid-response. The upstream_transport_failure_reason detail says which.',

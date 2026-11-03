@@ -5,7 +5,7 @@
   anywhere on screen. The five checks behind it come from one organisation's
   `namespace-bootstrapping` Helm chart (istio-injection label, PSA enforce label,
   `docker-registry-secret`, a RoleBinding onto cicd-serviceaccount/jenkins-deployer, and the
-  `egress-allow-btp-traffic` NetworkPolicy) — see `srv/fleet/collectors/compliance.js`. "Compliant"
+  chart's egress-allow NetworkPolicy) — see `srv/fleet/collectors/compliance.js`. "Compliant"
   with no standard named reads as certification against something external; what was actually
   measured is whether a namespace got the chart's treatment.
 

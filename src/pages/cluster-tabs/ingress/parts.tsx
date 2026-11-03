@@ -135,7 +135,7 @@ export function HostCell({ host }: { host: IngressHost }) {
 }
 
 /**
- * The objects that declare a host — a VirtualService or an APIRule.
+ * The objects that declare a host — a VirtualService, an Ingress or an HTTPRoute.
  *
  * An empty list is a finding and says so: nothing in the cluster publishes this host, so whatever is
  * answering for it is answering through a Gateway with no route behind it.
@@ -153,7 +153,7 @@ export function RouteRefs({ refs, empty, link = false }: { refs: IngressRouteRef
       <span className="inline-flex min-w-0 items-baseline gap-1.5" title={evidence}>
         <span className="mono truncate text-[12px]">
           {first.name}
-          <span className="text-muted"> {first.kind === 'APIRule' ? 'APIRule' : 'VS'}</span>
+          <span className="text-muted"> {first.kind === 'VirtualService' ? 'VS' : first.kind}</span>
         </span>
         {refs.length > 1 && <span className="mono text-[11px] text-muted/70">+{refs.length - 1}</span>}
       </span>

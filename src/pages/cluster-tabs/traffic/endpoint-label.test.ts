@@ -28,12 +28,12 @@ describe('endpointLabel', () => {
 });
 
 const CLS: DestinationName = {
-  display: 'SAP Cloud Logging (telemetry export)',
-  label: 'SAP Cloud Logging',
+  display: 'Cloud Logging (telemetry export)',
+  label: 'Cloud Logging',
   source: 'telemetry',
   key: null,
   qualifier: null,
-  objects: ['LogPipeline/cls-kyma-access-logs'],
+  objects: ['LogPipeline/otlp-access-logs'],
   others: []
 };
 const LB: DestinationName = {
@@ -49,7 +49,7 @@ const LB: DestinationName = {
 describe('endpointName', () => {
   test('a named external upstream reads name first, address second, with where the name came from', () => {
     const named = endpointName(ep({ kind: 'external', ip: '3.225.140.11', name: '3.225.140.11', port: 443, destination: CLS }));
-    expect(named).toEqual({ primary: 'SAP Cloud Logging (telemetry export)', secondary: '3.225.140.11:443', provenance: 'from the telemetry export of LogPipeline/cls-kyma-access-logs' });
+    expect(named).toEqual({ primary: 'Cloud Logging (telemetry export)', secondary: '3.225.140.11:443', provenance: 'from the telemetry export of LogPipeline/otlp-access-logs' });
   });
 
   test('an unnamed endpoint keeps its plain label and claims no provenance', () => {

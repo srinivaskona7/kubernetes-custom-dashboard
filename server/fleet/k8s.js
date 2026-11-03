@@ -46,7 +46,7 @@ let VERSION = '0.0.0';
 try {
   VERSION = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version || VERSION;
 } catch { /* running from a trimmed image; an unknown version beats a crashing transport */ }
-const USER_AGENT = `kyma-fleet-dashboard/${VERSION}`;
+const USER_AGENT = `k8s-fleet-dashboard/${VERSION}`;
 
 const DEFAULT_TIMEOUT_MS = 8000;
 

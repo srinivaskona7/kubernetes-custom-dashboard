@@ -4,7 +4,7 @@
  * ## What it does, and the line it does not cross
  *
  * It deletes two local records: the cluster's registration and the token this dashboard holds
- * for it. **Nothing on the target cluster changes.** The `kyma-fleet` namespace, the
+ * for it. **Nothing on the target cluster changes.** The `fleet-dashboard` namespace, the
  * `fleet-reader` ServiceAccount and its ClusterRole all stay exactly where they are, and the
  * server's response names the `kubectl` commands that would remove them — printed here, because
  * a console that quietly leaves objects behind on someone's cluster has told them nothing.

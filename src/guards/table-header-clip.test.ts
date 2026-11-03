@@ -55,15 +55,8 @@ const UI_SRC = path.join(FAKE_DIR, '../../src');
  * list grow quietly.
  */
 const KNOWN_CLIPPED = [
-  { array: 'coverageColumns', key: 'included', needs: 233, max: 150 },
-  { array: 'coverageColumns', key: 'excluded', needs: 233, max: 150 },
-  { array: 'columns', key: 'blast', needs: 225, max: 160 },
   { array: 'columns', key: 'chartVersion', needs: 151, max: 120 },
-  { array: 'moduleColumns', key: 'catalog', needs: 167, max: 140 },
-  { array: 'columns', key: 'effective', needs: 176, max: 150 },
   { array: 'columns', key: 'updated', needs: 143, max: 120 },
-  { array: 'apiruleColumns', key: 'target', needs: 159, max: 140 },
-  { array: 'columns', key: 'kind', needs: 151, max: 132 },
   { array: 'columns', key: 'appVersion', needs: 135, max: 130 }
 ];
 
@@ -133,7 +126,7 @@ test('the recorded clip list is shrinking, not growing', () => {
   // decision. If you fixed one, lower this number in the same commit.
   assert.equal(
     KNOWN_CLIPPED.length,
-    10,
+    3,
     'KNOWN_CLIPPED changed size. Fixing a clip? Lower this count. Adding one? Say in the entry why neither widening nor shortening was possible.'
   );
 });

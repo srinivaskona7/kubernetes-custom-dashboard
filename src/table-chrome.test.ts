@@ -2,7 +2,7 @@
  * The chrome around a table's rows: the selected-row bar, and the band between whatever sits above a
  * table and its header.
  *
- * Both were design-review findings on the OPA pages, and both are geometry a type cannot express:
+ * Both were design-review findings on the policy pages, and both are geometry a type cannot express:
  *
  *  1. The selected-row bar was `box-shadow: inset 3px 0 0` on the first cell, and the flush outer
  *     edge gives that cell `padding-inline-start: 0` — so the bar painted over the first three pixels
@@ -135,24 +135,3 @@ describe('the band above a table header', () => {
   });
 });
 
-describe('OPA table cells', () => {
-  const block = (file: string, key: string) => {
-    const src = read(file);
-    const at = src.indexOf(`key: '${key}'`);
-    expect(at).toBeGreaterThan(-1);
-    const next = src.indexOf("key: '", at + 1);
-    return src.slice(at, next === -1 ? undefined : next);
-  };
-
-  it('keeps an Overview scope line such as "every namespace (30)" on one line', () => {
-    const scope = block('pages/cluster-tabs/opa/OpaOverview.tsx', 'scope');
-    expect(scope).toMatch(/whitespace-nowrap/);
-    expect(scope).not.toMatch(/overflow-hidden|truncate|text-ellipsis/);
-  });
-
-  it('keeps Native policies Validations when the detail panel narrows the table', () => {
-    // The panel leaves a ~645px container: under `mid`'s 700px every priority-2 and -3 column sheds.
-    const v = block('pages/cluster-tabs/opa/OpaNativePolicies.tsx', 'validations');
-    expect(v).not.toMatch(/priority: [23]/);
-  });
-});

@@ -6,7 +6,7 @@
  * `WorkloadsArea` renders the workloads table with `key={section}` (`ClusterDetail.tsx`), which
  * force-remounts it when the operator moves between the Workloads and Pods sub-tabs — the two are
  * one renderer with two entrances. Any selection held in `useState` inside that subtree is
- * therefore *silently discarded* on that switch: you filter to `applecare`, click Pods, and get
+ * therefore *silently discarded* on that switch: you filter to `acme-shop`, click Pods, and get
  * every pod on the cluster back with the toolbar claiming nothing is filtered. The URL survives the
  * remount, the reload, and the Back button, and it makes a filtered view something an operator can
  * paste to a colleague.

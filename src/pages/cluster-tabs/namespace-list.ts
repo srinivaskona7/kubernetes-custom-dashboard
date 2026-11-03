@@ -9,7 +9,7 @@
  *    refused or truncated. Sorting those rows as 0 buries them at the bottom as if they were
  *    empty namespaces, which is the one place an operator would never look for "we could not
  *    read this".
- *  - **System namespaces sort last, they do not disappear.** On a Kyma cluster they are the
+ *  - **System namespaces sort last, they do not disappear.** On a managed cluster they are often the
  *    majority of the list and most of the pods, so hiding them makes the totals look wrong; they
  *    are marked instead.
  */
@@ -57,7 +57,7 @@ export function namespaceHeadline(
   const n = rows.length;
   const nsWord = `${n} namespace${n === 1 ? '' : 's'}`;
   const system = rows.filter(r => r.system).length;
-  const marked = system ? ` ${system} of them belong to Kubernetes or Kyma and are marked as system.` : '';
+  const marked = system ? ` ${system} of them belong to Kubernetes or the platform and are marked as system.` : '';
   if (reason === 'unavailable') {
     return `${nsWord}. The pod list was refused, so no namespace here has a pod count — that is not the same as their being empty.${marked}`;
   }

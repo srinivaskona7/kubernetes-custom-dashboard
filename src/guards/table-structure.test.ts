@@ -60,7 +60,6 @@ function stripComments(src) {
 const INLINE_EXCEPTIONS = [
   'pages/ClusterDetail.tsx',
   'pages/cluster-tabs/StorageTab.tsx',
-  'pages/cluster-tabs/opa/OpaOverview.tsx',
   // The Pods row's opened panel: a pod's containers and its recent events, inside one detail row
   // of the pods DataTable. A nested DataTable would bring its own toolbar and preferences per row.
   'pages/cluster-tabs/PodsSection.tsx'

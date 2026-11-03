@@ -65,7 +65,7 @@ const BACKEND_CODES = [
  * The codes that legitimately have no tailored copy: they never reach an error surface.
  *
  * The AUDIT_*, DRY_RUN, NOT_ENFORCED_BY_PODS and NO_* policy codes are *capability* reasons on the
- * OPA payload — they explain why a section is empty through the capability notice, and never arrive
+ * section payloads — they explain why a section is empty through the capability notice, and never arrive
  * as an `error.code`. Listing them explicitly is what keeps this test meaningful: a genuinely new
  * failure code shows up as a missing explanation rather than disappearing into a blanket allowance.
  */

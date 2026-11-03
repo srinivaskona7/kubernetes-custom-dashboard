@@ -167,9 +167,9 @@ describe('what the server left out', () => {
     expect(
       hiddenLine(
         { pollsHidden: 746, pollsHiddenBy: [{ kind: 'Streamlit health', count: 728 }, { kind: 'Istio readiness', count: 18 }], outsideNamespace: 32 },
-        ['applecare']
+        ['acme-shop']
       )
-    ).toBe('746 successful liveness polls hidden (Streamlit health 728, Istio readiness 18); 32 journeys never touched applecare');
+    ).toBe('746 successful liveness polls hidden (Streamlit health 728, Istio readiness 18); 32 journeys never touched acme-shop');
   });
   it('says nothing when nothing was left out, and ignores an outside count with no scope', () => {
     expect(hiddenLine({ pollsHidden: 0, pollsHiddenBy: [], outsideNamespace: 0 }, [])).toBeNull();

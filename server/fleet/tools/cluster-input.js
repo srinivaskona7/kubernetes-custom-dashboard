@@ -3,7 +3,7 @@
  * Build the cluster-input file for one cluster.
  *
  *   node server/fleet/tools/cluster-input.js --name "Platform Dev" --env dev \
- *     > ~/Downloads/kyma-fleet-platform-dev.json
+ *     > ~/Downloads/fleet-platform-dev.json
  *
  * The file it writes is not a new format: it is exactly the body of
  * `POST /api/fleet/clusters`, so the same four values can be pasted into the dialog,

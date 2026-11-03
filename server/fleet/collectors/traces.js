@@ -13,7 +13,7 @@
  *
  *   - **`traceparent`** (W3C) is the best one: it carries a trace id *and* a span id, so hops can
  *     be nested rather than merely ordered. It is only in the log if the mesh's access-log format
- *     asks for it — Kyma's stock `stdout-json` format does **not** — and Envoy only populates it
+ *     asks for it — a typical `stdout-json` format does **not** — and Envoy only populates it
  *     when tracing is enabled on the mesh. `enableTracing: false` on the Istio module CR governs
  *     that regardless of the sampling rate, which is a configuration this fleet has already been
  *     bitten by.
@@ -249,7 +249,7 @@ function correlationCoverage(records) {
      * True when the log format carries no `traceparent` at all while still carrying requests.
      *
      * A configuration finding rather than an absence: the mesh's access-log format has to name the
-     * header before Envoy writes it, and Kyma's stock `stdout-json` does not. Distinct from "no
+     * header before Envoy writes it, and a typical `stdout-json` does not. Distinct from "no
      * requests", which is what a bare zero would say.
      */
      traceparentAbsent: records.length > 0 && traceparentLines === 0,
@@ -558,7 +558,7 @@ async function collect({
     return verdict.state === 'on' && verdict.readable === false;
   });
   // Scoped before the pod budget, not after: the budget otherwise spends its twelve reads on the
-  // first proxies cluster-wide, and on platformsbx skipped 29 of 41 — including the namespace asked for.
+  // first proxies cluster-wide, and on a live cluster skipped 29 of 41 — including the namespace asked for.
   const registryRead = registryOf({ registryShare, listFn, baseCtx, maxAgeMs: maxLogAgeMs ? undefined : 0 });
   const proxyReads = readProxiesEarly({
     podsRead,
@@ -620,7 +620,7 @@ async function collect({
   // One class per journey, from its first hop (request-class.js); Ingress & Traffic uses the same rules.
   // Traffic's rule (edgeBlocks): the Gateways unread and either route source unread leaves hosts unjudgeable.
   const reg = registry.reads;
-  const hostsUnknown = Boolean(reg.gateways.unavailable && (reg.virtualservices.unavailable || reg.apirules.unavailable));
+  const hostsUnknown = Boolean(reg.gateways.unavailable && [reg.virtualservices, reg.ingresses, reg.httproutes].some(r => r.unavailable));
   const classCtx = { registry: names, routes: registry.routes, gatewayHosts: registry.gatewayHosts, hostsUnknown };
   for (const t of stitched.traces) Object.assign(t, classifyJourney(t, classCtx));
   const pollsHidden = new Map();
@@ -803,8 +803,8 @@ async function collect({
       slowTraces: traces.filter(t => t.totalDurationMs !== null && t.totalDurationMs >= SLOW_MS).length,
       slowThresholdMs: SLOW_MS,
       hops: traces.reduce((n, t) => n + t.hopCount, 0),
-      unavailable: unavailableLabels([telemetries, services, endpointslices, nodes, gateways, meshConfig, registry.reads.virtualservices, registry.reads.apirules, ...nameReads]),
-      truncated: truncatedLabels([pods, services, endpointslices, nodes, gateways, registry.reads.virtualservices, registry.reads.apirules, ...nameReads])
+      unavailable: unavailableLabels([telemetries, services, endpointslices, nodes, gateways, meshConfig, registry.reads.virtualservices, registry.reads.ingresses, registry.reads.httproutes, ...nameReads]),
+      truncated: truncatedLabels([pods, services, endpointslices, nodes, gateways, registry.reads.virtualservices, registry.reads.ingresses, registry.reads.httproutes, ...nameReads])
     },
     /** One row per method + host + normalised path, over the kept journeys that were someone's work. */
     endpoints,

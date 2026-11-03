@@ -4,7 +4,7 @@
  * `app/fleet-ui` runs vitest with `environment: 'node'` — jsdom cannot be installed on this
  * workstation (npm E401 against the internal registry) — so every rule lives here and
  * `TrafficErrorsPage.tsx` renders the answers without deciding any of them. These rules are worth
- * proving rather than eyeballing: the request's own example, "Namespace = applecare, Status = 5xx,
+ * proving rather than eyeballing: the request's own example, "Namespace = acme-shop, Status = 5xx,
  * Time = Last 6 hours must show only matching data", is a composition question, and a composition of
  * four predicates is exactly where one of them quietly wins.
  *

@@ -7,8 +7,6 @@
  *  #14  Direction coverage is read from `policyTypes` and `podSelector`; the allow rules inside a
  *       policy are never evaluated, and the privileged/non-root walk skipped initContainers, so a
  *       privileged init container rendered as `0 Privileged`.
- *  #15  `Drain blockers` was definitive about a cluster-wide, non-node-scoped, transiently-zero
- *       reading, and a PDB the controller had never reconciled appeared in no list at all.
  *
  * The collector halves are unit-tested here; the JSX halves are source-read, because
  * `app/fleet-ui` vitest runs `environment: 'node'` and jsdom cannot be installed on this
@@ -21,7 +19,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import security from '../collectors/security.js';
-import policy from '../collectors/policy.js';
 
 const __dirname = import.meta.dirname;
 
@@ -78,35 +75,6 @@ test('#14 a privileged initContainer is counted and named, not rendered as 0 Pri
     result.rootCapableContainerList.map(c => c.container).sort(),
     ['debug', 'setup']
   );
-});
-
-// ------------------------------------------------------------------ #15 PDB drain blockers
-
-const pdb = (name, { disruptionsAllowed, generation = 1, observedGeneration = 1 }) => ({
-  metadata: { name, namespace: 'app-ns', generation },
-  status: observedGeneration === null ? {} : { disruptionsAllowed, observedGeneration },
-  spec: { selector: { matchLabels: { app: name } } }
-});
-
-test('#15 an unreconciled PDB is reported as unknown instead of falling out of both lists', () => {
-  const pdbs = [
-    pdb('blocked', { disruptionsAllowed: 0 }),
-    pdb('healthy', { disruptionsAllowed: 2 }),
-    pdb('stale', { disruptionsAllowed: 0, generation: 4, observedGeneration: 2 }),
-    pdb('never-seen', { disruptionsAllowed: 0, observedGeneration: null })
-  ];
-  assert.deepStrictEqual(policy.drainBlockingPdbs(pdbs).map(p => p.name), ['blocked']);
-  assert.deepStrictEqual(
-    policy.unreconciledPdbs(pdbs).map(p => p.name),
-    ['stale', 'never-seen'],
-    'both the lagging and the never-statused PDB are unknown, not safe'
-  );
-  assert.deepStrictEqual(policy.unreconciledPdbs(pdbs)[1], {
-    name: 'never-seen',
-    namespace: 'app-ns',
-    observedGeneration: null,
-    generation: 1
-  });
 });
 
 // The heading over the unknown list must carry a count, not a bare label: the rows under it are

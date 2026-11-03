@@ -11,7 +11,7 @@
  *   1. **A hop count is what this read observed.** Never the request's real topology. A proxy that
  *      was not tailed contributes no hop, so a one-hop trace can be a five-hop request seen once.
  *      The window — proxies read, proxies skipped, lines read — is printed in place.
- *   2. **`traceparent` absent is a configuration finding, not an empty result.** Kyma's stock
+ *   2. **`traceparent` absent is a configuration finding, not an empty result.** Istio's stock
  *      `stdout-json` access-log format does not name the header at all, and Envoy only fills it
  *      when tracing is enabled on the Istio module. When it is missing the collector falls back to
  *      `x-request-id`, which Envoy always propagates — and then hop nesting is *inferred from
@@ -124,7 +124,7 @@ function correlationTip(corr: TracesData['correlation']): string {
   const parts: string[] = [];
   if (corr.traceparentAbsent) {
     parts.push(
-      "No access-log line in this window carried a traceparent. Kyma's stock stdout-json format does not emit it, and Envoy only fills it when tracing is enabled on the Istio module, so its absence describes the mesh's configuration, not the traffic. Correlation fell back to x-request-id, which Envoy propagates regardless."
+      "No access-log line in this window carried a traceparent. Istio's stock JSON access-log format does not emit it, and Envoy only fills it when tracing is enabled on the mesh, so its absence describes the mesh's configuration, not the traffic. Correlation fell back to x-request-id, which Envoy propagates regardless."
     );
   }
   if (corr.nestingInferred) {
@@ -1266,7 +1266,7 @@ export default function TracesTab({ id }: { id: string }) {
 
             {/* ------------------------------------------- where the full spans live, when they do */}
             {/*
-              No URL is constructed. A SAP Cloud Logging tenant's dashboard host is not readable
+              No URL is constructed. A Cloud Logging tenant's dashboard host is not readable
               from the cluster — it is a binding in a different subaccount — and inventing one
               would send an operator to a 404 with this console's name on it. What CAN be proved is
               the sink Envoy is streaming to, and that is what is named.
@@ -1276,8 +1276,8 @@ export default function TracesTab({ id }: { id: string }) {
                 <p className="text-[13px] font-semibold text-text">The full records are in your log backend</p>
                 <p className="mt-1 text-[13px] text-muted">
                   {offPodSinks.map(p => p.name).join(' and ')} stream{offPodSinks.length === 1 ? 's' : ''} these lines to{' '}
-                  <span className="mono">{offPodSinks.map(p => p.destination).join(', ')}</span>, which on a Kyma
-                  cluster is normally SAP Cloud Logging. Search there by the trace id or the request id in the table
+                  <span className="mono">{offPodSinks.map(p => p.destination).join(', ')}</span>, which is normally
+                  your cluster's log backend. Search there by the trace id or the request id in the table
                   above — both are propagated end to end, so a journey this window clipped is whole over there. This
                   console holds no credential for that tenant and cannot link into it.
                 </p>

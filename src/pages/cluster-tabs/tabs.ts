@@ -22,7 +22,6 @@ export type Tab =
   | 'logs'
   | 'traffic'
   | 'security'
-  | 'platform'
   | 'helm'
   | 'traces'
   | 'cost'
@@ -49,9 +48,7 @@ export const TABS: { id: Tab; label: string }[] = [
   { id: 'storage', label: 'Storage & Quotas' },
   { id: 'logs', label: 'Live Pod Logs' },
   { id: 'security', label: 'Security & Compliance' },
-  { id: 'platform', label: 'Modules & Telemetry' },
-  // Helm releases are their own destination, not a table appended to Modules & Telemetry. A
-  // release is an object an operator investigates — resources, values, manifest, revision
+  // Helm releases are their own destination, not a table appended to another tab. A release is an object an operator investigates — resources, values, manifest, revision
   // history — and every one of those views is a page reached from this list, so burying the
   // list under another tab's heading cost a click and hid the entry point. Read-only: this tab
   // and everything under it view, compare and copy, and never install, upgrade or roll back.
@@ -61,8 +58,8 @@ export const TABS: { id: Tab; label: string }[] = [
   // token, side by side. Two controls one label apart, landing on different pages, is the
   // duplication this grouping exists to remove.
   // "Cost & Budget", and the tab says "estimate" on its own heading. Every figure here is modelled
-  // from node shapes against a rate card held on the server — this console has no access to an SAP
-  // or hyperscaler invoice, so it can price what the cluster declares and nothing more.
+  // from node shapes against a rate card held on the server — this console has no access to a cloud
+  // provider invoice, so it can price what the cluster declares and nothing more.
   { id: 'cost', label: 'Cost & Budget' },
   { id: 'tokens', label: 'Credentials' }
 ];
@@ -88,7 +85,9 @@ export const TAB_ALIASES: Partial<Record<string, { tab: Tab; section: string; ke
   // Top Utilization's six sections were retired on 2026-09-25; its ranking lives on as a sub-tab.
   utilization: { tab: 'workloads', section: 'top', keep: ['ns'] },
   traffic: { tab: 'network', section: 'ingress', set: { networkView: 'edge' }, preserveSection: true },
-  traces: { tab: 'network', section: 'journeys', set: { networkView: 'flows' }, preserveSection: true }
+  traces: { tab: 'network', section: 'journeys', set: { networkView: 'flows' }, preserveSection: true },
+  // Modules & Telemetry was retired; its telemetry panels live on as the Observability tab.
+  platform: { tab: 'observability', section: 'telemetry', keep: [] }
 };
 
 /** The params a retired `?tab=` should be replaced with, or `null` when it is not an alias. */
@@ -150,7 +149,7 @@ export const TAB_SECTIONS = {
   nodes: [
     { id: 'overview', label: 'Overview', description: 'Summarizes node readiness, zones, pod capacity, and active conditions.' },
     { id: 'nodes', label: 'Nodes', description: 'Lists core/v1 Nodes with capacity, requests, taints, and kubelet details.' },
-    { id: 'zones', label: 'Zones & Topology', description: 'Groups Nodes by topology zone and Gardener worker pool labels.' },
+    { id: 'zones', label: 'Zones & Topology', description: 'Groups Nodes by topology zone and worker pool labels.' },
     { id: 'slots', label: 'Pod Slots', description: 'Compares scheduled pod counts with each Node pod-capacity ceiling.' },
     { id: 'conditions', label: 'Node Conditions', description: 'Shows Nodes reporting readiness or resource-pressure conditions.' },
     { id: 'taints', label: 'Taints', description: 'Lists the taints each Node declares, with how many Pods tolerate each one and how many are placed there.' },
@@ -173,7 +172,7 @@ export const TAB_SECTIONS = {
     { id: 'flows', label: 'Service flows', description: 'Request journeys, endpoints, outbound connections, service map, and proxy refusals.' }
   ],
   networking: [
-    { id: 'networking', label: 'Routes & Services', description: 'Published routes, Services, APIRules, VirtualServices and Gateways. NetworkPolicy isolation is on Security & Compliance → Security & Isolation.' }
+    { id: 'networking', label: 'Routes & Services', description: 'Published routes, Services, Ingresses, Gateway API Gateways and HTTPRoutes, and Istio VirtualServices and Gateways. NetworkPolicy isolation is on Security & Compliance → Security & Isolation.' }
   ],
   istio: [
     { id: 'mesh', label: 'Mesh security', description: 'Sidecars, Istio gateways and effective mTLS policy.' }
@@ -182,7 +181,7 @@ export const TAB_SECTIONS = {
     { id: 'certificates', label: 'Certificates', description: 'Certificate validity, expiry, issuers, and ingress bindings.' }
   ],
   observability: [
-    { id: 'telemetry', label: 'Telemetry pipelines', description: 'Reads Kyma telemetry pipeline readiness and OTel agent DaemonSet coverage — never a pipeline destination.' },
+    { id: 'telemetry', label: 'Telemetry pipelines', description: 'Reads telemetry pipeline readiness and OTel agent DaemonSet coverage — never a pipeline destination.' },
     { id: 'traces', label: 'Service flows & traces', description: 'Request journeys, endpoints, outbound connections, service map, and proxy refusals.' }
   ],
   storage: [
@@ -201,28 +200,13 @@ export const TAB_SECTIONS = {
     { id: 'gateway', label: 'Gateway & path', description: 'Gateway pods, HPA and EnvoyFilters, then each network hop in and out.' }
   ],
   security: [
-    // Namespace Compliance first so the first security question is scoped by namespace. PDBs & Drain was removed from the strip
-    // (2026-09-25); `PdbSection` in SecurityTab.tsx is kept, not mounted, and an old `?section=pdb`
-    // link falls back to Admission & Policy. Security & Isolation was removed the same day and
-    // restored 2026-09-26. "mesh policy" is not claimed: security.js reads no PeerAuthentication or
-    // AuthorizationPolicy, so the description names the screen that does.
+    // Namespace Compliance first so the first security question is scoped by namespace. PDBs & Drain
+    // was removed from the strip (2026-09-25), and an old `?section=pdb` link falls back to Namespace
+    // Compliance. Security & Isolation was removed the same day and restored 2026-09-26. "mesh
+    // policy" is not claimed: security.js reads no PeerAuthentication or AuthorizationPolicy, so the
+    // description names the screen that does.
     { id: 'compliance', label: 'Namespace Compliance', description: 'Summarizes the configured Namespace compliance checks.' },
-    { id: 'admission', label: 'Admission & Policy', description: 'Reads admission webhooks and Gatekeeper policy evidence.' },
     { id: 'isolation', label: 'Security & Isolation', description: 'Reads NetworkPolicy isolation, Secret and ServiceAccount inventory, and container security contexts. Effective mTLS is on Istio & Mesh \u2192 Mesh security.' }
-  ],
-  platform: [
-    // Three corrections, each against the collector: modules.js reads Kyma module CRs and the
-    // channel catalog and nothing else (no Services, no BTP service instances); platform.js:106
-    // lists only `apiservices` — no CustomResourceDefinitions read exists on this path; and
-    // observability.js projects pipeline readiness with no destination, output or host field, so
-    // "where are my logs shipped" must not be invited on a screen that cannot answer it. What that
-    // screen does read has to stay named, though — it renders three panels, not one (Prometheus-
-    // Operator objects with their scrape and rule verdicts, Kyma telemetry pipeline health, and OTel
-    // agent DaemonSet coverage), and a description that drops two of them removes the operator's only
-    // provenance for them.
-    { id: 'modules', label: 'Modules & Services', description: 'Reads installed Kyma modules, their channels, versions, and states against the channel catalog.' },
-    { id: 'integrity', label: 'Platform Integrity', description: 'Checks the aggregated APIServices backing platform APIs.' },
-    { id: 'observability', label: 'Observability', description: 'Reads Prometheus-Operator scrape and rule objects, Kyma telemetry pipeline readiness, and OTel agent DaemonSet coverage — never a pipeline destination.' }
   ],
   // The first four are one read: traces.js tails the istio-proxy access logs once, and the server
   // builds the journeys, the endpoint rows, the outbound rows and the call map from the same lines.
@@ -320,7 +304,6 @@ const IS_WORKSPACE: Record<Tab, boolean> = {
   logs: true,
   traffic: true,
   security: false,
-  platform: false,
   helm: false,
   traces: true,
   cost: false,
@@ -362,7 +345,7 @@ export const TAB_GROUPS: { id: string; label: string; tabs: [Tab, ...Tab[]] }[] 
   { id: 'core', label: 'Core', tabs: ['overview', 'nodes', 'workloads'] },
   { id: 'network', label: 'Network delivery', tabs: ['network', 'networking', 'istio'] },
   { id: 'trust', label: 'Observability & trust', tabs: ['observability', 'certificates', 'security'] },
-  { id: 'platform', label: 'Platform', tabs: ['storage', 'platform'] },
+  { id: 'platform', label: 'Platform', tabs: ['storage'] },
   { id: 'operations', label: 'Independent operations', tabs: ['logs', 'helm', 'cost', 'tokens'] }
 ];
 
@@ -390,7 +373,6 @@ const RANK_OF: Record<Tab, number> = {
   istio: 9,
   observability: 10,
   certificates: 11,
-  platform: 10,
   helm: 11,
   storage: 12,
   security: 13,
@@ -444,7 +426,6 @@ export const TAB_ICON: Record<Tab, IconName> = {
   logs: 'logs',
   traffic: 'traffic',
   security: 'security',
-  platform: 'platform',
   helm: 'helm',
   traces: 'traces',
   cost: 'cost',
@@ -492,16 +473,16 @@ export const TAB_ABOUT: Record<Tab, string> = {
   overview:
     'One verdict per topic, relayed from the same collector the tab behind it reads \u2014 this screen computes nothing of its own. Two reads: GET /clusters/:id/summary for the verdicts, GET /clusters/:id/namespaces for the namespace and pod counts on the Namespaces tile.',
   nodes:
-    'Reads Nodes from the core API: conditions, taints, allocatable capacity, and the zone and pool labels Gardener sets. Capacity here is what the node declares, not what is in use.',
+    'Reads Nodes from the core API: conditions, taints, allocatable capacity, and the zone and worker-pool labels the provider sets. Capacity here is what the node declares, not what is in use.',
   workloads:
     'Reads Namespaces with a cluster-wide Pod count (GET /clusters/:id/namespaces), and Deployments, StatefulSets, DaemonSets and their Pods from apps/v1 and core/v1, joined to live CPU and memory samples from metrics-server where it answers. The Autoscalers and CronJobs sub-tabs read HorizontalPodAutoscalers from autoscaling/v2 and CronJobs from batch/v1 (GET /clusters/:id/autoscaling), including each CronJob\u2019s last schedule time and, for an autoscaler pinned at its ceiling, the reason the controller gave.',
   network:
     'Three views of one request path: a summary of recent request outcomes; edge traffic, parsed from Istio proxy access logs (ingress gateway first) and joined to the Gateways, Certificates, DNSEntries, AuthorizationPolicies and EnvoyFilters that shape the edge; and service flows, which stitch the journey of one request from the access logs of each hop that handled it. It sees only requests a proxy logged inside the bounded tail read, so a namespace without sidecar injection has nothing to show. Routes and Services are on Networking and mesh posture on Istio & Mesh. NetworkPolicy isolation is on Security & Compliance \u2192 Security & Isolation.',
-  networking: 'Reads Kubernetes Services, APIRules, VirtualServices and Istio Gateways for published routes and backend targets.',
+  networking: 'Reads Kubernetes Services and Ingresses, Gateway API Gateways and HTTPRoutes, and Istio VirtualServices and Gateways for published routes and backend targets.',
   istio: 'Reads sidecar coverage, mTLS posture and Istio AuthorizationPolicy configuration.',
   observability: 'Reads Prometheus-Operator objects, telemetry pipeline readiness and OpenTelemetry agent coverage.',
   certificates:
-    'Reads cert-manager and Gardener Certificates for readiness, expiry and issuer, plus the TLS Secret name each Ingress references. Expiry is the date the Certificate reports, not the one a client is served; Istio Gateway credentials and the Secrets themselves are not read here.',
+    'Reads cert-manager Certificates for readiness, expiry and issuer, plus the TLS Secret name each Ingress references. Expiry is the date the Certificate reports, not the one a client is served; Istio Gateway credentials and the Secrets themselves are not read here.',
   storage:
     'Reads PersistentVolumeClaims, StorageClasses, ResourceQuotas and LimitRanges. A claim\u2019s capacity is what was requested; whether the volume behind it is full is not visible to the API server.',
   logs: 'Streams container logs straight from the kubelet through the API server\u2019s pods/log subresource. Nothing is stored or indexed here \u2014 what you see is the buffer the node still holds.',
@@ -510,11 +491,9 @@ export const TAB_ABOUT: Record<Tab, string> = {
   traces:
     'Stitches one request\u2019s journey back together from the Istio proxy access logs of every hop that handled it, correlated by W3C traceparent when the mesh logs one and by Envoy\u2019s x-request-id otherwise. It sees only the proxies and the bounded log window read for this sample, so a hop count is what this read observed \u2014 never the request\u2019s full topology.',
   security:
-    'Reads admission webhooks and Gatekeeper policy evidence, the per-namespace bootstrap compliance checks, and NetworkPolicies, Secret and ServiceAccount inventory and container security contexts for isolation. Secret names and types only \u2014 never a value. Istio PeerAuthentication and AuthorizationPolicy are not read here \u2014 effective mTLS is on Istio & Mesh \u2192 Mesh security.',
-  platform:
-    'Reads Kyma module CRs for installed modules, channels and states, plus aggregated APIServices for whether the cluster\u2019s extended APIs are actually being served, the Prometheus-Operator scrape and rule objects (Prometheuses, ServiceMonitors, PodMonitors, PrometheusRules), the telemetry pipeline resources with their readiness, and the OTel agent DaemonSet.',
+    'Reads the per-namespace bootstrap compliance checks, and NetworkPolicies, Secret and ServiceAccount inventory and container security contexts for isolation. Secret names and types only \u2014 never a value. Istio PeerAuthentication and AuthorizationPolicy are not read here \u2014 effective mTLS is on Istio & Mesh \u2192 Mesh security.',
   cost:
-    'Prices the cluster\u2019s own Nodes \u2014 instance-type label and declared capacity \u2014 against a rate card held on the server. It is an estimate, not an invoice: this console cannot read SAP BTP or hyperscaler billing, and a Node whose shape it does not recognise is left unpriced rather than guessed.',
+    'Prices the cluster\u2019s own Nodes \u2014 instance-type label and declared capacity \u2014 against a rate card held on the server. It is an estimate, not an invoice: this console cannot read cloud provider billing, and a Node whose shape it does not recognise is left unpriced rather than guessed.',
   helm: 'Decodes Helm release Secrets (owner=helm) for revisions, chart versions, manifests and values. Values are masked: a key is shown, a credential never is.',
   tokens:
     'The service-account credential this dashboard reads the cluster with \u2014 its namespace, expiry and whether it can renew itself. The token itself is never returned to the browser.'
@@ -536,7 +515,6 @@ export const TAB_ABBR: Record<Tab, string> = {
   // collision this map exists to prevent.
   traces: 'DT',
   security: 'SC',
-  platform: 'PF',
   helm: 'HL',
   cost: 'CB',
   tokens: 'CR'

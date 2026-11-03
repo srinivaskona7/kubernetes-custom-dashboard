@@ -90,7 +90,6 @@ const AutoscalingTab = lazy(() => import('./cluster-tabs/AutoscalingTab'));
 const CostTab = lazy(() => import('./cluster-tabs/CostTab'));
 const HelmTab = lazy(() => import('./cluster-tabs/HelmTab'));
 const LogsTab = lazy(() => import('./cluster-tabs/LogsTab'));
-const ModulesIntegrityTab = lazy(() => import('./cluster-tabs/ModulesIntegrityTab'));
 const NetworkOperationsTab = lazy(() => import('./cluster-tabs/NetworkOperationsTab'));
 const NetworkMeshTab = lazy(() => import('./cluster-tabs/NetworkMeshTab'));
 const ObservabilityTab = lazy(() => import('./cluster-tabs/ObservabilityTab'));
@@ -189,7 +188,7 @@ export default function ClusterDetail({ onRefreshed }: PageProps) {
   /**
    * Go to a tab, optionally landing on one of its sub-sections.
    *
-   * The `section` argument exists for the Overview grid. A tile named "Admission & policy" that set
+   * The `section` argument exists for the Overview grid. A tile named "Namespace compliance" that set
    * only `?tab=security` landed on `isolation`, because `useSection` falls back whenever the
    * current `?section=` is not one of the target tab's ids — so the tile named a topic and the tab
    * chose a different one, silently and with a plausible-looking screen at the end of it. Three of
@@ -637,9 +636,8 @@ export default function ClusterDetail({ onRefreshed }: PageProps) {
                   }
                 />
               )}
-              {tab === 'platform' && <ModulesIntegrityTab id={id} />}
-              {/* Helm has its own tab rather than sharing Modules & Telemetry. It was folded in
-                  there when it was one table; it is now the entry point to a per-release page
+              {/* Helm has its own tab rather than sharing another tab. It was folded into one
+                  when it was a single table; it is now the entry point to a per-release page
                   with resources, values, manifest and revision history, and an entry point
                   nobody can find is a feature nobody uses. Strictly read-only throughout. */}
               {tab === 'helm' && <HelmTab id={id} />}
@@ -1648,8 +1646,8 @@ function WorkloadsArea({
    *
    * `pods` calls the function the Pods table itself calls instead of summing `w.pods.length`. A pod
    * claimed by overlapping selectors is one row but several summands, so the old total promised more
-   * rows than the table could draw on any cluster with a shared selector — `kyma-system` has three
-   * Deployments sharing `control-plane: controller-manager`.
+   * rows than the table could draw on any cluster with a shared selector — operator namespaces commonly
+   * hold several Deployments sharing `control-plane: controller-manager`.
    */
   const workloadCount = useMemo(() => filterByNamespace(items, namespaces).length, [items, namespaces]);
 

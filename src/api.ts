@@ -692,7 +692,7 @@ export interface Me {
 
 /**
  * Mounted under Vite's `base` (VITE_BASE_PATH at build time), so the same bundle works at `/`
- * in dev and under the app's URL prefix behind Shield. BASE_URL always ends in a slash.
+ * in dev and under the app's URL prefix behind the SSO proxy. BASE_URL always ends in a slash.
  */
 const BASE = `${import.meta.env.BASE_URL}api/fleet`;
 
@@ -714,12 +714,12 @@ export class ApiError extends Error {
 // ------------------------------------------------------- lapsed SSO session
 
 /**
- * A lapsed Shield session does not answer 401. It answers the IdP login bootstrap as
+ * A lapsed SSO session does not answer 401. It answers the IdP login bootstrap as
  * **HTML at HTTP 200**, same-origin, not redirected — so neither the redirect check nor a
  * status check sees it, and the operator gets told the upstream returned garbage when in
  * fact they simply need to sign in again.
  *
- * The only cure is a full page reload, which lets Shield re-run SSO. The danger is a
+ * The only cure is a full page reload, which lets the SSO proxy re-run sign-in. The danger is a
  * console that reloads itself out from under the operator during the incident they opened it
  * for, so the budget for automatic reloads is a **wall clock** held in `sessionStorage`: the
  * timestamp of the last automatic reload is written immediately *before* `location.reload()`,
@@ -909,7 +909,7 @@ function nonJsonError(status: number, method: string, path: string): ApiError {
   if (status === 404) {
     return new ApiError(
       `The fleet API has no ${path} endpoint (404). The console and the srv pod are most likely ` +
-        'from different builds; redeploy srv, or check the Shield route for /api/fleet.',
+        'from different builds; redeploy srv, or check the ingress route for /api/fleet.',
       'NOT_FOUND',
       status
     );
@@ -928,9 +928,9 @@ function nonJsonError(status: number, method: string, path: string): ApiError {
 /**
  * In-flight GET coalescing.
  *
- * Two components asking for the same URL in the same tick is not hypothetical here: the
- * Security tab renders two independent sections that each `useAsync(() => api.clusterPolicy(id))`,
- * so one screen issued two 80 KB requests. Speculative prefetch makes the collision the normal
+ * Two components asking for the same URL in the same tick is not hypothetical here: two
+ * independent sections of one tab can each `useAsync` the same per-cluster read, so one screen
+ * issued two 80 KB requests. Speculative prefetch makes the collision the normal
  * case rather than the accident — the operator clicks a tab whose read is already on the wire.
  *
  * What is shared is the *promise*, never the response. Nothing is stored once the request
@@ -1037,7 +1037,7 @@ async function send<T>(path: string, init?: RequestInit): Promise<T> {
     throw netErr;
   }
 
-  // Shield answers an expired session with a redirect to the IdP. Following it
+  // The SSO proxy answers an expired session with a redirect to the IdP. Following it
   // inside fetch yields an opaque HTML login page rather than JSON, so it is detected
   // here and turned into a full page reload — the only thing that can re-authenticate.
   if (res.redirected && !res.url.startsWith(window.location.origin)) {
@@ -1204,8 +1204,7 @@ export const api = {
   // filtering in the browser — one cluster's read costs less, lands on the same `cache.wrap`
   // key the Overview tile already primed, and is the *only* place the per-cluster summary
   // fields live: the fleet-wide routes re-derive their summaries and drop
-  // `defaultStorageClassState`, `quotaCoverage`, `limitRanges` and all three APIRule-migration
-  // facts on the floor.
+  // `defaultStorageClassState`, `quotaCoverage` and `limitRanges` on the floor.
   clusterNetworking: (id: string, ns?: string) =>
     get<ClusterNetworking>(`/clusters/${id}/networking${qs({ namespace: ns })}`),
   clusterStorage: (id: string, ns?: string) =>
@@ -1228,7 +1227,7 @@ export const api = {
   /**
    * Rollout status — a GET, and the only rollout-related call this client makes.
    *
-   * `restart` and `scale` used to sit on either side of it and are deliberately gone: Kyma Fleet
+   * `restart` and `scale` used to sit on either side of it and are deliberately gone: this dashboard
    * is a strictly read-only platform and must never change cluster state. Re-adding either one
    * is a product decision, not a refactor.
    */
@@ -1248,37 +1247,6 @@ export const api = {
   // --- new enterprise collectors, wave 2
   mesh: () => get<FleetGroup<MeshData>>('/mesh'),
   clusterMesh: (id: string) => get<ClusterGroupEnvelope<MeshData>>(`/clusters/${id}/mesh`),
-  modules: () => get<FleetGroup<ModulesData>>('/modules'),
-  clusterModules: (id: string) => get<ClusterGroupEnvelope<ModulesData>>(`/clusters/${id}/modules`),
-  btpServices: () => get<FleetGroup<BtpServicesData>>('/btp-services'),
-  clusterBtpServices: (id: string) => get<ClusterGroupEnvelope<BtpServicesData>>(`/clusters/${id}/btp-services`),
-  policy: () => get<FleetGroup<PolicyData>>('/policy'),
-  clusterPolicy: (id: string) => get<ClusterGroupEnvelope<PolicyData>>(`/clusters/${id}/policy`),
-  /**
-   * OPA Gatekeeper inspection for one cluster: one row per Constraint with its match scope,
-   * parameters, audit violations and — when it enforces nothing — the named reason.
-   *
-   * Separate from `clusterPolicy`, which stays the cheap fleet-wide admission verdict every
-   * overview tile reads. This is only fetched by the OPA screen.
-   */
-  clusterOpa: (id: string) => get<ClusterGroupEnvelope<OpaData>>(`/clusters/${id}/opa`),
-  /**
-   * Whether this cluster exposes any source of RUNTIME admission decisions, and which knob is
-   * off when it does not. Its own request because the Decision Activity tab is the only screen
-   * that asks, and the answer costs a Deployment read.
-   */
-  clusterOpaDecisions: (id: string) => get<ClusterGroupEnvelope<OpaDecisionData>>(`/clusters/${id}/opa/decisions`),
-  /**
-   * The live ConstraintTemplate, and its Constraint when one is named, as YAML.
-   *
-   * Fetched only when a policy drawer's YAML tab opens — never with the list. Both Kinds are
-   * constants on the server, so this is not a generic resource GET and cannot be aimed at a
-   * Secret; values are masked server-side regardless.
-   */
-  clusterOpaPolicyYaml: (id: string, template: string, constraint?: string | null) =>
-    get<ClusterGroupEnvelope<OpaManifestData>>(
-      `/clusters/${id}/opa/policies/${encodeURIComponent(template)}/yaml${qs({ constraint: constraint ?? undefined })}`
-    ),
   /**
    * Modelled spend for one cluster. Its own request: nothing else on the console needs a rate
    * card, and this is the only collector whose numbers are not read from the cluster.
@@ -1290,8 +1258,6 @@ export const api = {
   clusterReliability: (id: string) => get<ClusterGroupEnvelope<ReliabilityData>>(`/clusters/${id}/reliability`),
   observability: () => get<FleetGroup<ObservabilityData>>('/observability'),
   clusterObservability: (id: string) => get<ClusterGroupEnvelope<ObservabilityData>>(`/clusters/${id}/observability`),
-  integrity: () => get<FleetGroup<IntegrityData>>('/integrity'),
-  clusterIntegrity: (id: string) => get<ClusterGroupEnvelope<IntegrityData>>(`/clusters/${id}/integrity`),
   clusterHelmReleases: (id: string) => get<ClusterGroupEnvelope<HelmData>>(`/clusters/${id}/helm/releases`),
   /**
    * One live object as redacted YAML — what a detail drawer opens.
@@ -1455,29 +1421,36 @@ export const api = {
 };
 
 /**
- * One APIRule row. Both `/networking` and `/clusters/:id/networking` run the same row builder
- * in `srv/fleet/collectors/networking.js`, so one type serves both — including the four
- * migration fields, which the fleet-wide type used to omit and therefore hide.
+ * One Gateway API Gateway (`gateway.networking.k8s.io/v1`). Both `/networking` and
+ * `/clusters/:id/networking` run the same row builder in `server/fleet/collectors/networking.js`,
+ * so one type serves both. `programmed` is the controller's own `Programmed` condition; `null`
+ * means the controller has not reported one.
  */
-export interface ApiRuleRow {
+export interface GatewayRow {
   id: string;
   clusterId?: string;
   name: string;
   namespace: string;
-  host: string;
-  gateway: string;
-  serviceName: string;
-  servicePort: number;
-  state: string;
-  paths: { path: string; methods: string[]; accessStrategies: string[] }[];
-  /** The version the collector read this as. Always v2 — v1beta1 stopped reconciling in 3.10. */
-  servedVersion: string;
-  /** The version it was *created* as, per annotation; null on resources predating it. */
-  originalVersion: string | null;
-  /** True only for v1beta1 — the version whose reconciliation is switched off. */
-  needsMigration: boolean;
-  /** Whether `paths` came from `.spec` or from the v1beta1 stored-spec annotation. */
-  specSource: string;
+  gatewayClassName: string | null;
+  listeners: { name: string | null; protocol: string | null; port: number | null; hostname: string | null; tls: boolean }[];
+  programmed: boolean | null;
+  createdAt: string | null;
+}
+
+/**
+ * One Gateway API HTTPRoute. `parents` are `namespace/name` of the Gateways it attaches to, and a
+ * backend with no namespace is the route's own — both already filled in by the collector.
+ * `accepted` is true only when every parent accepted it; `null` when no parent has reported.
+ */
+export interface HttpRouteRow {
+  id: string;
+  clusterId?: string;
+  name: string;
+  namespace: string;
+  hostnames: string[];
+  parents: string[];
+  backends: { name: string; namespace: string; port: number | null; weight: number }[];
+  accepted: boolean | null;
   createdAt: string | null;
 }
 
@@ -1497,9 +1470,10 @@ export interface IngressRow {
   clusterId?: string;
   name: string;
   namespace: string;
-  rules: { host: string; paths: { path: string; backendService: string }[] }[];
+  rules: { host: string; paths: { path: string; pathType?: string; backendService: string }[] }[];
   tls: { hosts: string[]; secretName: string | null }[];
   ingressClassName: string | null;
+  createdAt?: string | null;
 }
 
 export interface ServiceRow {
@@ -1515,13 +1489,15 @@ export interface FleetNetworking {
   summary: {
     clusters: number;
     unreachable: number;
-    totalApirules: number;
+    totalHttpRoutes: number;
+    totalGateways: number;
     totalVirtualServices: number;
     totalIngresses: number;
     totalServices: number;
   } & Completeness;
   clusters: ClusterSlot[];
-  apirules: ApiRuleRow[];
+  httproutes: HttpRouteRow[];
+  gateways: GatewayRow[];
   virtualservices: VirtualServiceRow[];
   ingresses: IngressRow[];
   services: ServiceRow[];
@@ -1529,33 +1505,25 @@ export interface FleetNetworking {
 }
 
 /**
- * One cluster's networking payload. The fleet-wide route re-derives its own summary and drops
- * all three APIRule-migration facts, so this is the only shape that can answer "is anything
- * still on v1beta1" — the question `apirulesNeedingMigration` exists to answer.
+ * One cluster's networking payload: Ingresses, Gateway API Gateways and HTTPRoutes, Istio
+ * VirtualServices and Gateways, and Services. Gateway API and Istio are optional CRDs — a 404 on
+ * either is an honest zero, never an entry in `summary.unavailable`.
  */
 export interface NetworkingData {
   cluster: CollectorCluster;
   summary: {
-    apirulesCount: number;
-    virtualServicesCount: number;
-    gatewaysCount: number;
     ingressesCount: number;
+    /** Gateway API Gateways. Istio's own Gateway CR is `istioGatewaysCount`. */
+    gatewaysCount: number;
+    httproutesCount: number;
+    virtualServicesCount: number;
+    istioGatewaysCount: number;
     servicesCount: number;
-    /** How many APIRules were created at each version. Keys are fixed, values are counts. */
-    apirulesByVersion: { v1beta1: number; v2alpha1: number; v2: number; unknown: number };
-    /** How many are still v1beta1 and therefore no longer reconciled. */
-    apirulesNeedingMigration: number;
-    /**
-     * Why `apirulesCount` is not a number to trust, when it is not — already shaped as the
-     * UI's `UnavailableEntry`. "API Gateway absent" and "module too old to serve v2" both
-     * arrive as a 404 and mean opposite things; `unavailable` is bare labels and cannot say
-     * which. Null whenever the read succeeded.
-     */
-    apirulesUnavailable: { label: string; reason?: string | null; detail?: string | null } | null;
   } & Completeness;
-  apirules: ApiRuleRow[];
-  virtualservices: VirtualServiceRow[];
   ingresses: IngressRow[];
+  gateways: GatewayRow[];
+  httproutes: HttpRouteRow[];
+  virtualservices: VirtualServiceRow[];
   services: ServiceRow[];
   collectedAt?: string;
 }
@@ -2208,7 +2176,7 @@ export interface Trace {
   outbound?: TraceOutboundItem[];
   outboundDropped?: number;
   /**
-   * The path this journey took, edge to BTP (journey-path.js). Not `path`, which is the request's
+   * The path this journey took, edge to external dependency (journey-path.js). Not `path`, which is the request's
    * URL path. Null with `pathReason` when no path could be built; absent on an older server.
    */
   journeyPath?: JourneyPath | null;
@@ -2298,8 +2266,8 @@ export interface TraceOutboundRow {
 /**
  * Which correlation header the window could be stitched by, and the evidence for that choice.
  *
- * `traceparentAbsent` is a CONFIGURATION finding, not an absence of traffic: Kyma's stock
- * `stdout-json` access-log format does not name the header, and Envoy only fills it when tracing
+ * `traceparentAbsent` is a CONFIGURATION finding, not an absence of traffic: Istio's
+ * stock JSON access-log format does not name the header, and Envoy only fills it when tracing
  * is enabled on the mesh. The tab says so rather than rendering a shrug.
  */
 export interface TraceCorrelation {
@@ -2498,8 +2466,6 @@ export interface CostNode {
   monthlyCu: number | null;
   normalizedUnits?: number | null;
   nodeHourlyUsd?: number | null;
-  /** The Kyma surcharge component, or `null` for a provider whose rate is not split. Never 0. */
-  sapFeeHourlyUsd?: number | null;
   rateSource: 'catalog' | 'derived' | null;
   /** How far this machine's CU-meter dollar equivalent sits from its list price, in percent. */
   modelDivergencePct?: number | null;
@@ -2603,11 +2569,11 @@ export interface CostData {
 
 export type ClusterCostResponse = ClusterGroupEnvelope<CostData>;
 
-// -------------------------------------------------------- Wave-1 group collectors (+integrity)
+// ------------------------------------------------------------------- group collectors
 
 /**
- * The response shape shared by the eight `registerGroupRoutes` pairs in router.js
- * (mesh, modules, btp-services, policy, capacity, reliability, observability, integrity):
+ * The response shape shared by the `registerGroupRoutes` pairs in router.js
+ * (mesh, capacity, reliability, observability):
  * one rich `data` object per cluster, no fleet-level recomputation of a collector's own
  * counts. `T` is the collector-specific payload riding on each cluster's slot.
  */
@@ -2654,7 +2620,7 @@ export interface GraphService {
 }
 
 export interface GraphIngress {
-  kind: 'APIRule' | 'Ingress';
+  kind: 'Ingress' | 'HTTPRoute';
   name: string;
   hosts: string[];
   state?: string | null;
@@ -3072,465 +3038,6 @@ export interface MeshData {
   collectedAt: string;
 }
 
-export interface ModulesData {
-  cluster: CollectorCluster;
-  summary: {
-    kymaCount: number;
-    moduleCount: number;
-    /** null when the read failed, or when CRD-absent-vs-served-empty could not be resolved. */
-    kymaManaged: boolean | null;
-    unreadableReason: { reason: string; detail: string } | null;
-  } & Completeness;
-  kymas: unknown[];
-}
-
-export interface BtpServicesData {
-  cluster: CollectorCluster;
-  summary: {
-    instanceCount: number;
-    bindingCount: number;
-    instancesWithNoBindingInThisClusterCount: number;
-    functionsEvidence: unknown;
-    subscriptionsEvidence: unknown;
-  } & Completeness;
-  instances: unknown[];
-  bindings: unknown[];
-  instancesWithNoBindingInThisCluster: string[];
-  functions: unknown[];
-  bindingUsage: unknown[];
-}
-
-/**
- * One validating or mutating admission webhook, as `srv/fleet/collectors/policy.js` returns it.
- *
- * Typed here rather than narrowed per-screen because two screens now read the same rows — the
- * Security tab's risk list and OPA's Admission Webhooks tab — and a second private copy of this
- * shape is how the two would quietly drift apart.
- *
- * `failClosedWebhooks` on `PolicyData` holds EVERY webhook, not only the fail-closed ones; the
- * field name predates the widening and the risk is carried per row in `risk`.
- */
-export interface AdmissionWebhookEntry {
-  configName: string;
-  webhookName: string;
-  kind: 'Validating' | 'Mutating';
-  /** From the installer's own labels. Null when nothing declares it — never guessed from the name. */
-  owner: string | null;
-  /** The effective value: an absent `failurePolicy` is reported as its API default, `Fail`. */
-  failurePolicy: string;
-  /** The effective value: an absent `timeoutSeconds` is reported as its API default, 10. */
-  timeoutSeconds: number;
-  sideEffects: string | null;
-  matchPolicy: string;
-  /** CEL match-condition NAMES only. The expressions never cross the wire. */
-  matchConditions: string[];
-  admissionReviewVersions: string[];
-  operations: string[];
-  backendStatus: 'ready' | 'none' | 'absent' | 'unknown';
-  /** null when no EndpointSlice matched the Service — "could not join", never "0 ready". */
-  readyEndpoints: number | null;
-  service: { name: string; namespace: string | null; port: number | null; path: string | null } | null;
-  urlBacked: boolean;
-  caBundlePresent: boolean;
-  risk: 'fail-open' | 'active-outage-risk' | 'latent-risk' | 'unknown';
-  /**
-   * What this webhook actually does right now, as one word. `backend-unavailable` is never
-   * reported as enforcing: a webhook whose Service has no ready endpoint enforces nothing.
-   */
-  effectiveStatus:
-    | 'active-enforcing'
-    | 'fail-open'
-    | 'backend-unavailable'
-    | 'declared-matches-nothing'
-    | 'partially-effective'
-    | 'unknown';
-  namespaceSelector: unknown;
-  objectSelector: unknown;
-  objectSelectorPresent: boolean;
-  blastRadius: {
-    rules: { group: string; resource: string; operations: string[] }[];
-    wildcard: boolean;
-    namespaceScope: {
-      evaluable: boolean;
-      scope: string;
-      matchedNamespaceCount: number | null;
-      totalNamespaces: number | null;
-    };
-  };
-}
-
-/** One ValidatingAdmissionPolicyBinding, as `nativePolicyEntries` in policy.js returns it. */
-export interface NativePolicyBinding {
-  name: string;
-  policyName: string | null;
-  validationActions: ('Deny' | 'Warn' | 'Audit' | string)[];
-  paramRef: { name: string | null; namespace: string | null; selectorPresent: boolean; parameterNotFoundAction: string | null } | null;
-  namespaceScope: {
-    evaluable: boolean;
-    scope: string;
-    matchedNamespaceCount: number | null;
-    totalNamespaces: number | null;
-    matchedNamespaces?: string[];
-  };
-  objectSelectorPresent: boolean;
-  narrowsResources: boolean;
-}
-
-/**
- * One built-in ValidatingAdmissionPolicy joined to its bindings. The CEL expressions stay on the
- * cluster; only each validation's `message` crosses the wire.
- */
-export interface NativePolicy {
-  name: string;
-  owner: string | null;
-  module: string | null;
-  failurePolicy: string;
-  paramKind: { apiVersion: string | null; kind: string | null } | null;
-  rules: { group: string; resource: string; operations: string[] }[];
-  wildcard: boolean;
-  operations: string[];
-  validationCount: number;
-  messages: string[];
-  matchConditionCount: number;
-  auditAnnotationCount: number;
-  typeCheckWarningCount: number;
-  bindings: NativePolicyBinding[];
-  strongestAction: 'Deny' | 'Warn' | 'Audit' | null;
-  /** 'unknown' when the binding list was not read — never 'unbound' over a read that failed. */
-  effectiveStatus: 'enforcing' | 'warn-only' | 'audit-only' | 'unbound' | 'no-action' | 'unknown';
-}
-
-export interface NativePolicies {
-  policies: NativePolicy[];
-  /** Bindings naming a policy that does not exist — admitted by the API server, enforcing nothing. */
-  orphanBindings: NativePolicyBinding[];
-}
-
-export interface PolicyData {
-  cluster: CollectorCluster;
-  summary: {
-    policyEngineVerdict: 'unknown' | string;
-    constraintTemplateCount: number;
-    validatingAdmissionPolicyCount: number;
-    validatingAdmissionPolicyBindingCount: number;
-    /** Policies with at least one Deny binding / with no binding at all. */
-    validatingAdmissionPolicyEnforcingCount: number;
-    validatingAdmissionPolicyUnboundCount: number;
-    /** Every validating and mutating webhook. */
-    webhookCount: number;
-    /** Only the webhooks whose effective failurePolicy is `Fail`. */
-    failClosedWebhookCount: number;
-    activeOutageRiskCount: number;
-    pdbCoveragePercent: number | null;
-    pdbDrainBlockerCount: number;
-  } & Completeness;
-  admission: unknown;
-  /** Every validating AND mutating webhook — see `AdmissionWebhookEntry` on the field name. */
-  failClosedWebhooks: AdmissionWebhookEntry[];
-  nativePolicies: NativePolicies;
-  pdbCoverage: unknown;
-  collectedAt: string;
-}
-
-// -----------------------------------------------------------------------------------------
-// OPA Gatekeeper — srv/fleet/collectors/opa.js
-//
-// Typed in full rather than as `unknown` + a narrowing cast (the pattern `PolicyData` uses for
-// its three nested fields): these shapes drive five screens' filters and sorts, and a wrong
-// cast is exactly the failure the per-cluster envelope alias already cost this repo once.
-// -----------------------------------------------------------------------------------------
-
-/** Where a policy's plain-language purpose came from. `identity` asserts nothing beyond names. */
-export type OpaPurposeSource = 'annotation' | 'template-annotation' | 'mapping' | 'identity';
-
-/** The action that governs admission. `unknown` means "cannot be determined", never "none". */
-export type OpaEnforcementAction = 'deny' | 'warn' | 'dryrun' | 'unknown';
-
-/**
- * `active`   evaluating, and nothing structural stops it rejecting or warning.
- * `warning`  evaluating, but something is worth reading — dry-run, a stale audit.
- * `inactive` cannot affect admission at all.
- * `unknown`  a read on the path to this answer failed.
- */
-export type OpaPolicyStatus = 'active' | 'warning' | 'inactive' | 'unknown';
-
-export type OpaCategory =
-  | 'Security context'
-  | 'Resource requests and limits'
-  | 'Image provenance'
-  | 'Networking'
-  | 'Labels and ownership'
-  | 'Storage'
-  | 'Other';
-
-/** How the category was decided. `fallback` means uncategorised, not "judged to be Other". */
-export type OpaCategorySource = 'mapping' | 'target-kinds' | 'fallback';
-
-export interface OpaIneffectiveReason {
-  code: string;
-  text: string;
-}
-
-export interface OpaTargetKind {
-  apiGroups: string[];
-  kinds: string[];
-}
-
-export interface OpaNamespaceScope {
-  included: string[] | null;
-  excluded: string[] | null;
-  selector: unknown;
-  /** False when the namespace list could not be read — every count below is then null. */
-  evaluable: boolean;
-  scope: 'cluster-wide' | 'selector' | 'unknown';
-  matchedNamespaceCount: number | null;
-  totalNamespaces: number | null;
-  matchedNamespaces: string[] | null;
-}
-
-export interface OpaAuditFreshness {
-  /** `never` — the audit controller has not evaluated this constraint, so 0 is not a zero. */
-  state: 'fresh' | 'stale' | 'never' | 'unknown';
-  at: string | null;
-  ageSeconds: number | null;
-  /** The age past which this audit is called stale — ten `--audit-interval`s when that was read. */
-  thresholdSeconds: number;
-}
-
-export interface OpaViolation {
-  id: string;
-  policyId: string;
-  enforcementAction: string;
-  category: OpaCategory;
-  message: string;
-  group: string;
-  version: string;
-  kind: string;
-  namespace: string | null;
-  name: string;
-  /** Always null: Gatekeeper does not record when it first saw a violation. */
-  firstSeen: string | null;
-  lastSeen: string | null;
-  source: 'gatekeeper-audit' | 'admission-metric' | 'decision-log';
-}
-
-export interface OpaPolicy {
-  id: string;
-  templateName: string;
-  constraintName: string | null;
-  displayName: string;
-  constraintKind: string | null;
-  purpose: { text: string; source: OpaPurposeSource };
-  enforcementAction: OpaEnforcementAction;
-  category: OpaCategory;
-  categorySource: OpaCategorySource;
-  status: OpaPolicyStatus;
-  ineffectiveReasons: OpaIneffectiveReason[];
-  targetKinds: OpaTargetKind[];
-  namespaceScope: OpaNamespaceScope;
-  parameters: unknown;
-  enforcedByPods: { pod: string; enforced: boolean }[];
-  /** Gatekeeper's own `status.totalViolations`; null when the constraint has no status yet. */
-  violationCount: number | null;
-  /** How many of those are itemised — Gatekeeper caps the array, the count is uncapped. */
-  violationsShown: number;
-  violationsTruncated: boolean;
-  audit: OpaAuditFreshness;
-  sourceReferences: { kind: string; namespace: string | null; name: string; plural?: string }[];
-  library: OpaLibraryMatch;
-}
-
-/**
- * The template's relation to the upstream Gatekeeper library (collectors/gatekeeper-library.js).
- * `modified` is a library name carrying different Rego; `rego: null` means no comparison was
- * possible (a CEL-only template), never "identical".
- */
-export interface OpaLibraryMatch {
-  state: 'custom' | 'library' | 'modified';
-  title: string | null;
-  libraryVersion: string | null;
-  /** The cluster template's own `metadata.gatekeeper.sh/version` annotation. */
-  clusterVersion: string | null;
-  /** null when either version is missing or unparseable. */
-  behind: boolean | null;
-  rego: 'identical' | 'differs' | null;
-  bundles: string[];
-  path: string | null;
-}
-
-export interface OpaBundleCoverage {
-  bundle: string;
-  total: number;
-  installed: number;
-  enforcing: number;
-  /** Installed members whose Constraint read failed, so whether they deny is not known. */
-  enforcingUnknown: number;
-  templates: { name: string; title: string; installed: boolean; enforcing: boolean | null; modified: boolean }[];
-}
-
-export interface OpaGatekeeperState {
-  /** null when we could not tell — which is not the same as false. */
-  installed: boolean | null;
-  state: 'installed' | 'absent' | 'no-templates' | 'forbidden' | 'unreadable';
-  reason: string | null;
-  detail: string | null;
-}
-
-export interface OpaWebhookState {
-  present: boolean | null;
-  /** null when the endpoint join could not be made: "unknown", never "down". */
-  active: boolean | null;
-  backendStatus: 'ready' | 'none' | 'absent' | 'unknown';
-  configName?: string | null;
-  webhookName?: string;
-  failurePolicy: string | null;
-  timeoutSeconds: number | null;
-  operations?: string[];
-  service: { name: string; namespace: string | null; port: number | null } | null;
-  reason: string | null;
-}
-
-/**
- * Gatekeeper's own runtime, from one read of the `gatekeeper-system` Deployments.
- *
- * Separate from `OpaGatekeeperState`, which answers "are the CRDs there". A cluster can hold
- * every CRD and run no audit controller, and then every violation count on the screen is frozen
- * — which is the one thing a governance page must not report as "0 violations".
- */
-export interface OpaRuntime {
-  /** null when neither the chart's version label nor a non-`latest` image tag answered. */
-  version: string | null;
-  versionSource: 'app.kubernetes.io/version label' | 'controller image tag' | null;
-  controllerPresent: boolean | null;
-  controllerReady: number | null;
-  audit: {
-    /**
-     * `running` / `not-ready` / `disabled` (no controller, or scaled to zero) / `unreadable`
-     * (the Deployment read was refused) / `unknown` (neither Deployment is in that namespace,
-     * so Gatekeeper is installed somewhere this console is not looking).
-     */
-    state: 'running' | 'not-ready' | 'disabled' | 'unreadable' | 'unknown';
-    present: boolean | null;
-    ready: number | null;
-    /** `--audit-interval`, when the audit Deployment was readable. */
-    intervalSeconds: number | null;
-    /** `--constraint-violations-limit` — why an itemised list is shorter than its count. */
-    violationsLimit: number | null;
-  };
-  reason: string | null;
-  detail: string | null;
-}
-
-export interface OpaData {
-  cluster: CollectorCluster;
-  gatekeeper: OpaGatekeeperState;
-  runtime: OpaRuntime;
-  /**
-   * Five verdicts, one per screen, because they fail independently. Decision Activity is absent on
-   * purpose — it is the one surface whose sources this payload does not read, and it states its own
-   * verdict on `OpaDecisionData.capability`.
-   */
-  capabilities: {
-    policies: Capability;
-    violations: Capability;
-    webhooks: Capability;
-    coverage: Capability;
-    runtime: Capability;
-  };
-  webhook: OpaWebhookState;
-  summary: {
-    byAction: Record<OpaEnforcementAction, number>;
-    byStatus: Record<OpaPolicyStatus, number>;
-    ineffectiveCount: number;
-    /** A floor when `auditViolationCountPartial` is true. */
-    auditViolationTotal: number;
-    auditViolationCountPartial: boolean;
-    policiesWithUnknownViolationCount: number;
-    policyCount: number;
-    templateCount: number;
-    /** True when nothing was read at all — the counts describe zero policies, not a clean cluster. */
-    templateLimitExceeded: boolean;
-    templateLimit: number;
-    categories: Record<OpaCategory, { policies: number; violations: number }>;
-    /** Per template, not per Constraint row. */
-    library: { library: number; modified: number; custom: number; behind: number };
-  } & Completeness;
-  policies: OpaPolicy[];
-  violations: OpaViolation[];
-  /** Empty `bundles` when the template list was not read — never "0 of N" over a missing read. */
-  library: {
-    source: { repo: string; commit: string | null; date: string | null } | null;
-    bundles: OpaBundleCoverage[];
-  };
-  collectedAt: string;
-}
-
-/** One possible source of runtime admission decisions, and whether it is switched on. */
-export interface OpaDecisionSource {
-  id: 'decision-log' | 'admission-metric';
-  label: string;
-  available: boolean;
-  detail: string;
-}
-
-/**
- * One runtime admission decision.
- *
- * Never populated from the audit: an audit violation is an existing object that would fail a
- * policy, and a decision is a request that was actually judged. The two are different facts and
- * this array only ever carries the second. Deliberately no request body — the object being admitted
- * is the object, and for a Secret that is the Secret.
- */
-export interface OpaDecisionEntry {
-  id: string;
-  at: string | null;
-  decision: 'denied' | 'warned' | 'allowed' | 'dryrun';
-  policyId: string | null;
-  policy: string | null;
-  operation: string | null;
-  kind: string | null;
-  namespace: string | null;
-  name: string | null;
-  message: string;
-  source: 'decision-log' | 'admission-metric';
-}
-
-export interface OpaDecisionData {
-  /** False on every cluster where neither source is wired — which is the common case. */
-  available: boolean;
-  state: 'no-source' | 'unreadable' | 'gatekeeper-absent';
-  reason: string | null;
-  detail: string | null;
-  /**
-   * `not-configured` when the controller is there and nothing records its decisions; `forbidden`
-   * when the Deployment read itself was refused. Collapsing the two would send an operator to
-   * edit a role binding when the fix is a `--log-denies` flag, or the reverse.
-   */
-  capability?: Capability;
-  sources: OpaDecisionSource[];
-  audit?: {
-    present: boolean | null;
-    state: OpaRuntime['audit']['state'];
-    intervalSeconds: number | null;
-    violationsLimit: number | null;
-  };
-  entries: OpaDecisionEntry[];
-  collectedAt: string;
-}
-
-/** One YAML pane in a policy drawer. `label` states which live object it is, verbatim. */
-export interface OpaManifestDocument {
-  label: 'LIVE CONSTRAINTTEMPLATE' | 'LIVE GATEKEEPER CONSTRAINT';
-  kind: string;
-  name: string;
-  yaml: string;
-}
-
-export interface OpaManifestData {
-  documents: OpaManifestDocument[];
-  collectedAt: string;
-}
-
 /** One node's row in the overcommit ranking. Percentages are null when metrics are absent. */
 export interface OvercommitNode {
   name: string;
@@ -3692,28 +3199,6 @@ export interface ObservabilityData {
   agentCoverage: { recognizedAgents: unknown[] | null };
 }
 
-export interface IntegrityData {
-  cluster: Cluster;
-  summary: {
-    /** Every count is null (not 0) when the apiservices read itself failed. */
-    totalApiServices: number | null;
-    aggregatedApiServices: number | null;
-    unavailableAggregated: number | null;
-    /** null when the served-version probe could not be made at all. */
-    servedVersionDrift: boolean | null;
-  } & Completeness;
-  apiservices: {
-    name: string;
-    group: string | null;
-    version: string | null;
-    isAggregated: boolean;
-    serviceRef: string;
-    isAvailable: boolean | null;
-    availableReason: string | null;
-  }[];
-  servedVersionAudit: { checked: boolean; drifted: unknown[]; detail: string };
-}
-
 // ---------------------------------------------------------------------------- summary
 
 /**
@@ -3788,14 +3273,14 @@ export interface TileStats {
 }
 
 /**
- * The seventeen feature groups, in the order `SUMMARY_GROUPS` declares them on the server.
+ * The thirteen feature groups, in the order `SUMMARY_GROUPS` declares them on the server.
  * Exported because the cluster Overview renders one tile per group and needs to iterate them
  * in a stable order — `Object.keys` on the response would be at the mercy of JSON key order.
  */
 export type SummaryGroupKey =
   | 'health' | 'compliance' | 'workloads' | 'networking' | 'storage' | 'security'
-  | 'autoscaling' | 'certificates' | 'topology' | 'mesh' | 'modules' | 'btpServices'
-  | 'policy' | 'capacity' | 'reliability' | 'observability' | 'integrity';
+  | 'autoscaling' | 'certificates' | 'topology' | 'mesh' | 'capacity' | 'reliability'
+  | 'observability';
 
 export interface SummaryResponse {
   groups: Record<SummaryGroupKey, GroupSummary>;
@@ -3817,7 +3302,7 @@ export interface FleetSummaryResponse extends SummaryResponse {
 }
 
 /**
- * `GET /clusters/:id/summary` — the same seventeen verdicts for one cluster, which is what the
+ * `GET /clusters/:id/summary` — the same thirteen verdicts for one cluster, which is what the
  * cluster Overview tab renders. `cluster` rides along so the identity strip does not need a
  * second request to name what it is describing.
  */
@@ -3852,7 +3337,6 @@ export interface FleetDrift {
     totalClusters: number;
     k8sVersions: string[];
     hasK8sDrift: boolean;
-    driftedModulesCount: number;
   } & Completeness;
   clusterParity: (Completeness & {
     id: string;
@@ -3869,11 +3353,6 @@ export interface FleetDrift {
     memoryAllocatable: number;
     isDrifted?: boolean;
   })[];
-  moduleParity: {
-    module: string;
-    clusterStatus: Record<string, { status: 'active' | 'degraded' | 'missing' | 'unknown'; installed: boolean; version?: string }>;
-    isDrifted: boolean;
-  }[];
   items: {
     name: string;
     namespace: string;
@@ -3898,9 +3377,9 @@ export interface FleetDrift {
 /**
  * One `extensionProviders` entry from the mesh ConfigMap, resolved by name from the Telemetry CR.
  *
- * `readable` is the whole point and it is three-valued. A Kyma mesh ships both `stdout-json`
+ * `readable` is the whole point and it is three-valued. A mesh can declare both `stdout-json`
  * (`envoyFileAccessLog` → `/dev/stdout`, which is exactly the stream `pods/log` returns) and
- * `kyma-logs` (`envoyOtelAls` → the OTLP gateway, which writes nothing to stdout at all). Switch
+ * `otel-logs` (`envoyOtelAls` → the OTLP gateway, which writes nothing to stdout at all). Switch
  * the Telemetry CR from the first to the second and this tab's pod-tailing read still succeeds —
  * it just finds no request lines. `null` means the provider's implementation key is one this
  * console does not recognise: not readable, not unreadable, unknown, and never to be collapsed
@@ -4134,9 +3613,9 @@ export interface TrafficLatency {
  */
 export type IngressHostGroup = 'corporate' | 'declared' | 'infra' | 'address' | 'other' | 'none';
 
-/** An object that declares a host — an Istio VirtualService or a Kyma APIRule. */
+/** An object that declares a host — an Istio VirtualService, an Ingress or a Gateway API HTTPRoute. */
 export interface IngressRouteRef {
-  kind: 'VirtualService' | 'APIRule';
+  kind: 'VirtualService' | 'Ingress' | 'HTTPRoute';
   name: string;
   namespace: string;
   /** The field that proves it, quoted. */
@@ -4195,7 +3674,7 @@ export interface IngressHost {
   matchedSuffix: string | null;
   /** The Gateway admitting this host, independent of the bucket — a corporate domain no Gateway serves is a finding. */
   gateway: { name: string; namespace: string; host: string; port: number | null; evidence: string } | null;
-  /** Every VirtualService and APIRule declaring it. Empty means nothing in the cluster publishes it. */
+  /** Every VirtualService, Ingress and HTTPRoute declaring it. Empty means nothing in the cluster publishes it. */
   servedBy: IngressRouteRef[];
   requests: number;
   ok: number;
@@ -4280,7 +3759,7 @@ export interface IngressAppTraffic {
   hosts: { host: string; requests: number; errors: number }[];
 }
 
-/** A cert.gardener / cert-manager Certificate. Expiry is from `status`, never from the Secret. */
+/** A cert-manager Certificate. Expiry is from `status`, never from the Secret. */
 export interface IngressCertificate {
   namespace: string;
   name: string;
@@ -4639,7 +4118,7 @@ export interface TrafficIngress {
   /** Gateway pods this read chose and did not get — a 403 or a timeout. Named, never subtracted. */
   ingressProxiesUnread: string[];
   /** How many declaring objects were readable. `null` means that read was refused. */
-  routesFrom: { virtualservices: number | null; apirules: number | null };
+  routesFrom: { virtualservices: number | null; ingresses: number | null; httproutes: number | null };
   /*
     The classified edge (plan 2026-09-26). Every field below is optional so an older srv still
     type-checks; a screen that finds one absent says "not available from this server", never 0.
@@ -4731,7 +4210,7 @@ export interface IngressNetworkPath {
     /** `null` = the Gateways read failed. */
     servers: number | null;
     tlsServers?: number | null;
-    /** `null` = the VirtualServices or APIRules read failed. */
+    /** `null` = the VirtualServices, Ingresses or HTTPRoutes read failed. */
     routes: number | null;
   };
   egress: {
@@ -4748,46 +4227,13 @@ export interface IngressNetworkPath {
   envoyFilters?: { istioVersion: string | null };
 }
 
-export interface NarrativeCertificate {
-  commonName: string | null;
-  aprns: string[];
-  subject: string;
-  subjectFields: Record<string, string>;
-  subjectAltNames: { type: string; value: string }[];
-  issuer: string;
-  issuerCommonName: string | null;
-  serialNumber: string;
-  fingerprint256: string;
-  validFrom: string;
-  validTo: string;
-  hoursRemaining: number;
-  state: 'valid' | 'expiring' | 'expired' | 'not-yet-valid';
-}
-
-export interface NarrativeStatus {
-  status: 'ok' | 'warn' | 'fail' | 'missing';
-  detail: string;
-  paths: {
-    certPath: string | null;
-    keyPath: string | null;
-    caPath: string | null;
-  };
-  leaf: NarrativeCertificate | null;
-  chain: NarrativeCertificate[];
-  ca: NarrativeCertificate[];
-  caError?: string | null;
-  keyMatches: boolean | null;
-}
-
+/** `GET /api/status`: what this deployment is. Deliberately carries nothing from the app config. */
 export interface AppStatusResponse {
-  checkedAt: string;
-  narrative: NarrativeStatus;
-  whisper: { loaded: boolean };
-  runtime: {
-    namespace: string | null;
-    pod: string | null;
-    nodeEnv: string;
-  };
+  ok: boolean;
+  version: string;
+  /** Registered clusters; `null` when the server was started without a registry. */
+  clusters: number | null;
+  authMode: 'oidc' | 'none';
 }
 
 export interface TrafficData extends CollectorCluster {

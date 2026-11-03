@@ -29,9 +29,9 @@ describe('attentionProblems', () => {
   });
 
   it('maps severity, and sends listeners rows to Hosts & TLS with the object and its namespace', () => {
-    const p = attentionProblems([att({ severity: 'critical', kind: 'cert-expiry', section: 'listeners', ref: 'istio-system/kyma-gateway-certs' })])![0]!;
+    const p = attentionProblems([att({ severity: 'critical', kind: 'cert-expiry', section: 'listeners', ref: 'istio-system/main-gateway-certs' })])![0]!;
     expect(p.severity).toBe('bad');
-    expect(p.target).toEqual({ section: 'hosts', text: 'kyma-gateway-certs', namespace: 'istio-system' });
+    expect(p.target).toEqual({ section: 'hosts', text: 'main-gateway-certs', namespace: 'istio-system' });
   });
 
   it('points a host row at the host', () => {
@@ -65,12 +65,12 @@ describe('accessProblems', () => {
   it('names each refusing policy by namespace/name with its count', () => {
     const out = accessProblems(
       access({
-        policies: [{ namespace: 'istio-system', name: 'apple-acl', action: 'ALLOW', selector: null, remoteIpBlocks: 3, rules: 1, denied: 283 }],
+        policies: [{ namespace: 'istio-system', name: 'edge-acl', action: 'ALLOW', selector: null, remoteIpBlocks: 3, rules: 1, denied: 283 }],
         deniedByHost: [{ host: 'a.example.com', count: 12 }]
       })
     )!;
     // An allowlist refusing unknown clients is the policy working: info, never a warning.
-    expect(out[0]).toMatchObject({ severity: 'info', title: 'AuthorizationPolicy istio-system/apple-acl', detail: 'refused 283', count: 283, target: { section: 'clients', text: 'apple-acl', namespace: 'istio-system' } });
+    expect(out[0]).toMatchObject({ severity: 'info', title: 'AuthorizationPolicy istio-system/edge-acl', detail: 'refused 283', count: 283, target: { section: 'clients', text: 'edge-acl', namespace: 'istio-system' } });
     expect(out[1]).toMatchObject({ severity: 'info', title: 'a.example.com', count: 12 });
   });
 
@@ -238,7 +238,7 @@ describe('failuresEmptyLine', () => {
 
 describe('overviewProblems', () => {
   const policies = (denied: number): IngressAccess => ({
-    policies: [{ namespace: 'istio-system', name: 'apple-acl', action: 'ALLOW', selector: null, remoteIpBlocks: 3, rules: 1, denied }],
+    policies: [{ namespace: 'istio-system', name: 'edge-acl', action: 'ALLOW', selector: null, remoteIpBlocks: 3, rules: 1, denied }],
     deniedTotal: denied,
     deniedByHost: [{ host: 'a.example.com', count: 12 }],
     peers: { distinct: 0, internal: 0, external: 0, externalAllowed: 0, externalBlockedOnly: 0 },
@@ -252,14 +252,14 @@ describe('overviewProblems', () => {
     const out = overviewProblems(warn, policies(283))!;
     expect(out.map(p => [p.title, p.severity])).toEqual([
       ['t', 'warn'],
-      ['AuthorizationPolicy istio-system/apple-acl', 'info']
+      ['AuthorizationPolicy istio-system/edge-acl', 'info']
     ]);
     // The same row Access control lists, so a press lands on the same policy.
     expect(out[1]).toEqual(accessProblems(policies(283))![0]);
   });
 
   it('adds no refused-host lines: those stay on Access control', () => {
-    expect(overviewProblems([], policies(1))!.map(p => p.key)).toEqual(['ap:istio-system/apple-acl']);
+    expect(overviewProblems([], policies(1))!.map(p => p.key)).toEqual(['ap:istio-system/edge-acl']);
   });
 
   it('keeps the attention rows alone when the policies were not read, and stays null when the attention list was not', () => {

@@ -82,7 +82,7 @@ export interface Column<T> {
    * This exists because `width` alone caps nothing. `.tbl` uses the default `table-layout: auto`,
    * where a `<th>` width is a *suggestion* the widest cell overrides, and `.tbl tbody td` sets
    * `white-space: nowrap`, so a cell never wraps and the column grows to its longest row instead.
-   * Measured on OPA Admission Webhooks at 1440: eight visible columns summed to 2157px inside a
+   * Measured on a nine-column webhook table at 1440: eight visible columns summed to 2157px inside a
    * 1090px container — Webhook 463px, Target resources 392px, Backend 336px — and shedding a whole
    * column recovered 100px of the 1067px overflow. The tier was necessary and nowhere near
    * sufficient; uncapped text columns were the dominant term.

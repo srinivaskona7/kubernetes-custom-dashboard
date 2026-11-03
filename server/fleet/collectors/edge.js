@@ -3,9 +3,9 @@
  *
  * ## Why classify first
  *
- * Measured on platformsbx 2026-09-26: of 303 HTTP requests the gateways logged, 238 were the
- * `healthz.` probe, 58 were refused by the `apple-acl` IP allowlist, 155 more connections never
- * got past TLS, and **5** were application traffic. An error share over all of them (20.5 %) was
+ * Measured on a live cluster: of 303 HTTP requests the gateways logged, 238 were the `healthz.`
+ * probe, 58 were refused by an IP-allowlist AuthorizationPolicy, 155 more connections never got
+ * past TLS, and **5** were application traffic. An error share over all of them (20.5 %) was
  * the allowlist rejecting scanners, and the headline p95 of 1 ms was the probe. Neither answered
  * "are my apps OK at the edge". So every record gets exactly one class, first match wins:
  *
@@ -13,12 +13,12 @@
  *   direct-ip       Host is an address, loopback, missing, or admitted by no Gateway and no route
  *   policy-blocked  an AuthorizationPolicy refused it (`rbac_access_denied*`)
  *   probe           the platform's own health probe (`healthz.`)
- *   platform        routed to a system namespace, or a documented platform host (cp., gateway.)
+ *   platform        routed to a system namespace
  *   app             everything else: published application traffic
  *
  * Counts are over the sample the Traffic tab read. Nothing here is a rate or a total.
  *
- * Also here: the config the edge is built from — Certificates, DNSEntries, AuthorizationPolicies,
+ * Also here: the config the edge is built from — cert-manager Certificates, AuthorizationPolicies,
  * PeerAuthentications, EnvoyFilters — each joined to the Gateway servers, and the attention list
  * derived from all of it. Every join is by declared name, never by resemblance.
  */
@@ -30,10 +30,10 @@ const CLASS_ORDER = ['tls-rejected', 'direct-ip', 'policy-blocked', 'probe', 'pl
 /** p95 below this many samples is a statement about a handful of requests; it is withheld. */
 const MIN_P95_SAMPLES = 20;
 /*
-  Gardener renews on its own at `status.renewalDate` (a third of a 90-day life, measured on
-  platformsbx 2026-09-26), so a certificate 39 days from expiry is steady state, not a warning. A
-  certificate is a finding only when its renewal date has passed without a new one, or it is inside
-  the last week. Without a renewal date the warning falls back to the same 30 days.
+  cert-manager renews on its own at `status.renewalTime` (by default two thirds into the
+  certificate's life), so a certificate 39 days from expiry is steady state, not a warning. A
+  certificate is a finding only when its renewal time has passed without a new one, or it is inside
+  the last week. Without a renewal time the warning falls back to the same 30 days.
 */
 const CERT_CRITICAL_DAYS = 7;
 const CERT_WARNING_DAYS = 30;
@@ -157,22 +157,21 @@ function daysLeft(iso, now) {
 
 function readyOf(obj) {
   const st = (obj && obj.status) || {};
-  if (st.state) return st.state === 'Ready';
   const c = (st.conditions || []).find(x => x.type === 'Ready');
   return c ? c.status === 'True' : null;
 }
 
-/** cert.gardener Certificates, joined to the Gateway servers whose `credentialName` is their Secret. */
+/** cert-manager Certificates, joined to the Gateway servers whose `credentialName` is their Secret. */
 function certificateRows(certificates, gatewayRows, now = Date.now()) {
   if (!certificates || certificates.unavailable) {
     return { items: [], unavailable: Boolean(certificates && certificates.unavailable), reason: (certificates && certificates.reason) || null };
   }
   const items = (certificates.items || []).map(c => {
     const spec = c.spec || {};
-    const secretName = (spec.secretRef && spec.secretRef.name) || spec.secretName || null;
+    const secretName = spec.secretName || null;
     const st = c.status || {};
-    const expires = st.expirationDate || null;
-    const renewal = Date.parse(st.renewalDate || '');
+    const expires = st.notAfter || null;
+    const renewal = Date.parse(st.renewalTime || '');
     return {
       namespace: c.metadata.namespace,
       name: c.metadata.name,
@@ -182,10 +181,10 @@ function certificateRows(certificates, gatewayRows, now = Date.now()) {
       expires,
       daysLeft: daysLeft(expires, now),
       ready: readyOf(c),
-      renewalDate: st.renewalDate || null,
-      /** True once the renewal date passed and the same certificate is still in place. */
+      renewalDate: st.renewalTime || null,
+      /** True once the renewal time passed and the same certificate is still in place. */
       renewalOverdue: Number.isFinite(renewal) ? renewal < now : null,
-      issuer: (spec.issuerRef && spec.issuerRef.name) || (st.issuerRef && st.issuerRef.name) || null,
+      issuer: (spec.issuerRef && spec.issuerRef.name) || null,
       usedBy: gatewayRows.filter(g => g.credentialName && g.credentialName === secretName).map(g => g.key)
     };
   });
@@ -193,24 +192,9 @@ function certificateRows(certificates, gatewayRows, now = Date.now()) {
   return { items, unavailable: false, reason: null };
 }
 
-function dnsEntryRows(dnsentries) {
-  if (!dnsentries || dnsentries.unavailable) {
-    return { items: [], unavailable: Boolean(dnsentries && dnsentries.unavailable), reason: (dnsentries && dnsentries.reason) || null };
-  }
-  const items = (dnsentries.items || []).map(d => ({
-    namespace: d.metadata.namespace,
-    name: d.metadata.name,
-    dnsName: (d.spec || {}).dnsName || null,
-    targets: (d.spec || {}).targets || [],
-    state: (d.status || {}).state || null
-  }));
-  return { items, unavailable: false, reason: null };
-}
-
-/** DNS → Gateway server → Certificate for one host. `null` parts are gaps, not zeros. */
-function hostChain(host, { gatewayRows, certificates, dnsEntries, gatewaysUnavailable = false }) {
+/** Gateway server → Certificate for one host. `null` parts are gaps, not zeros. */
+function hostChain(host, { gatewayRows, certificates, gatewaysUnavailable = false }) {
   if (!host || isAddress(host)) return null;
-  const dns = dnsEntries.unavailable ? undefined : dnsEntries.items.find(d => d.dnsName && admits(d.dnsName, host)) || null;
   const servers = gatewayRows
     .filter(g => g.hosts.some(h => admits(h, host)))
     .map(g => {
@@ -226,9 +210,7 @@ function hostChain(host, { gatewayRows, certificates, dnsEntries, gatewaysUnavai
       };
     });
   return {
-    /** `undefined` on the wire is absent: the DNSEntry read failed, so the gap is unknown. */
-    dns: dns === undefined ? undefined : dns ? { name: `${dns.namespace}/${dns.name}`, dnsName: dns.dnsName, ready: dns.state ? dns.state === 'Ready' : null } : null,
-    /** `undefined` when the Gateway read failed, for the same reason. */
+    /** `undefined` on the wire is absent: the Gateway read failed, so the gap is unknown. */
     servers: gatewaysUnavailable ? undefined : servers
   };
 }
@@ -350,8 +332,8 @@ const INGRESS_CHART_LABELS = Object.freeze({ app: 'istio-ingressgateway', istio:
 
 /**
  * The ingress gateway pod's own labels, from the pods list already read. A Service or Gateway
- * selects on a subset of them, and on platformsbx both keys: matching against `{istio}` alone
- * found no LB Service and dropped kyma-gateway.
+ * selects on a subset of them, and often on both chart keys: matching against `{istio}` alone
+ * found no LB Service and dropped a Gateway selecting on `app` too.
  */
 function ingressLabelsOf(pods) {
   const pod = ((pods && pods.items) || []).find(p => ((p.metadata || {}).labels || {}).istio === 'ingressgateway');
@@ -459,8 +441,8 @@ function errorBucket(g, edgeClass = null) {
   if (edgeClass === 'direct-ip') return 'direct-ip';
   if (Number(g.code) === 404 || (g.responseFlags || []).includes('NR')) return 'not-routed';
   /*
-    Code 0 with no flag and no detail is a TCP connection Envoy logged with no HTTP status — on the
-    live cluster the telemetry gateways' 900 healthy exports to SAP Cloud Logging. Nothing says it
+    Code 0 with no flag and no detail is a TCP connection Envoy logged with no HTTP status — on a
+    live cluster, a telemetry collector's hundreds of healthy exports to its backend. Nothing says it
     failed, so it gets no bucket (the UI lists it as unclassified) rather than "App failed".
   */
   if (!Number(g.code) && !(g.responseFlags || []).length && !details.length) return null;
@@ -496,11 +478,12 @@ function attentionOf({ certificates, app, hosts, routes, access, envoyFilters, g
     if (h.server > 0) out.push({ severity: 'critical', kind: 'app-5xx', title: `${h.host}: ${h.server} server error(s)`, detail: `${h.server} of ${h.requests} app requests in the sample answered 5xx`, section: 'failures', ref: h.host });
     else if (h.notFound > 0) out.push({ severity: 'warning', kind: 'app-404', title: `${h.host}: ${h.notFound} not found`, detail: `${h.notFound} of ${h.requests} app requests in the sample answered 404`, section: 'failures', ref: h.host });
   }
+  // An Ingress or HTTPRoute publishes a host on purpose; a VirtualService host is often mesh-internal.
   const seen = new Set(hosts.map(h => h.host).filter(Boolean));
   for (const r of routes) {
-    if (r.kind !== 'APIRule' || r.host.includes('*')) continue;
+    if ((r.kind !== 'Ingress' && r.kind !== 'HTTPRoute') || r.host.includes('*')) continue;
     const hit = [...seen].some(h => routeAdmits(r.host, h));
-    if (!hit) out.push({ severity: 'info', kind: 'idle-host', title: `${r.host}: no traffic in the sample`, detail: `Published by APIRule ${r.namespace}/${r.name}; nothing reached it in the lines read`, section: 'hosts', ref: r.host });
+    if (!hit) out.push({ severity: 'info', kind: 'idle-host', title: `${r.host}: no traffic in the sample`, detail: `Published by ${r.kind} ${r.namespace}/${r.name}; nothing reached it in the lines read`, section: 'hosts', ref: r.host });
   }
   for (const p of access.peerAuthentications) {
     if (p.mode === 'PERMISSIVE') out.push({ severity: 'warning', kind: 'permissive-mtls', title: `PeerAuthentication ${p.namespace}/${p.name} is PERMISSIVE`, detail: `Plaintext is accepted${p.selector ? ` for ${Object.entries(p.selector).map(([k, v]) => `${k}=${v}`).join(', ')}` : ` in namespace ${p.namespace}`}`, section: 'listeners', ref: `${p.namespace}/${p.name}` });
@@ -519,27 +502,39 @@ function attentionOf({ certificates, app, hosts, routes, access, envoyFilters, g
 
 /* ------------------------------------------------------------------ network path */
 
-function csv(v) {
-  return String(v || '').split(',').map(x => x.trim()).filter(Boolean);
+const REGION_LABELS = ['topology.kubernetes.io/region', 'failure-domain.beta.kubernetes.io/region'];
+const ZONE_LABELS = ['topology.kubernetes.io/zone', 'failure-domain.beta.kubernetes.io/zone'];
+
+function labelOf(node, keys) {
+  const labels = (node.metadata && node.metadata.labels) || {};
+  for (const k of keys) if (labels[k]) return labels[k];
+  return null;
 }
 
-/** `kube-system/shoot-info`, the Gardener-written facts about the shoot. Values, not Secrets. */
-function shootInfoOf(configmaps) {
-  const cm = configmaps && !configmaps.unavailable ? (configmaps.items || [])[0] : null;
-  const d = (cm && cm.data) || null;
+/**
+ * The cluster's provider, region and zones, from the Nodes every conformant cluster has. The
+ * provider is the `spec.providerID` scheme the cloud controller wrote (`aws://`, `azure://`,
+ * `gce://`, `kind://`); the region and zones are the well-known topology labels. A fact no Node
+ * states is `null`, never a default.
+ */
+function clusterFactsOf(nodes) {
+  if (!nodes || nodes.unavailable) {
+    return { provider: null, region: null, zones: [], unavailable: Boolean(nodes && nodes.unavailable), reason: (nodes && nodes.reason) || null };
+  }
+  const items = nodes.items || [];
+  const schemes = new Map();
+  for (const n of items) {
+    const m = /^([a-z][a-z0-9+.-]*):\/\//i.exec(String((n.spec && n.spec.providerID) || ''));
+    if (m) bump(schemes, m[1].toLowerCase());
+  }
+  const provider = [...schemes].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0];
+  const regions = [...new Set(items.map(n => labelOf(n, REGION_LABELS)).filter(Boolean))].sort();
   return {
-    provider: (d && d.provider) || null,
-    region: (d && d.region) || null,
-    domain: (d && d.domain) || null,
-    shootName: (d && d.shootName) || null,
-    nodeCidr: (d && d.nodeNetwork) || null,
-    podCidr: (d && d.podNetwork) || null,
-    serviceCidr: (d && d.serviceNetwork) || null,
-    /** Gardener writes the NAT addresses as CIDRs; a `/32` is one address. */
-    natIps: d ? csv(d.egressCIDRs).filter(c => !c.includes('/') || /\/32$/.test(c)).map(c => c.replace(/\/32$/, '')) : [],
-    natCidrs: d ? csv(d.egressCIDRs).filter(c => c.includes('/') && !/\/32$/.test(c)) : [],
-    unavailable: Boolean(configmaps && configmaps.unavailable) || (!cm && Boolean(configmaps)),
-    reason: configmaps && configmaps.unavailable ? configmaps.reason || 'UPSTREAM' : !cm ? 'NOT_FOUND' : null
+    provider: provider ? provider[0] : null,
+    region: regions.length ? regions.join(', ') : null,
+    zones: [...new Set(items.map(n => labelOf(n, ZONE_LABELS)).filter(Boolean))].sort(),
+    unavailable: false,
+    reason: null
   };
 }
 
@@ -573,8 +568,8 @@ function outboundPolicyOf(meshConfig) {
  * the objects that declare each hop. Nothing is drawn that no object states: a hop whose read
  * failed is `null` or `unavailable`, never a default.
  */
-function networkPath({ shootInfo, services, pods, nodes, dnsEntries, envoyFilters, access, gatewayRows, routes, gatewaysUnavailable = false, routesUnavailable = false, meshConfig, serviceEntries, lbDns = [], destinations = [], destinationSources = null, observed = null }) {
-  const info = shootInfoOf(shootInfo);
+function networkPath({ services, pods, nodes, envoyFilters, access, gatewayRows, routes, gatewaysUnavailable = false, routesUnavailable = false, meshConfig, serviceEntries, lbDns = [], destinations = [], destinationSources = null, observed = null }) {
+  const info = clusterFactsOf(nodes);
   const podItems = pods && !pods.unavailable ? pods.items || [] : [];
   const nodeItems = nodes && !nodes.unavailable ? nodes.items || [] : [];
   const zoneOf = new Map(nodeItems.map(n => [n.metadata.name, ((n.metadata.labels || {})['topology.kubernetes.io/zone']) || null]));
@@ -585,20 +580,8 @@ function networkPath({ shootInfo, services, pods, nodes, dnsEntries, envoyFilter
     : [];
 
   return {
-    cluster: {
-      provider: info.provider,
-      region: info.region,
-      zones: [...new Set([...zoneOf.values()].filter(Boolean))].sort(),
-      domain: info.domain,
-      shootName: info.shootName,
-      nodeCidr: info.nodeCidr,
-      podCidr: info.podCidr,
-      serviceCidr: info.serviceCidr,
-      unavailable: info.unavailable,
-      reason: info.reason
-    },
+    cluster: info,
     ingress: {
-      dns: dnsEntries.unavailable ? null : dnsEntries.items.map(d => ({ name: `${d.namespace}/${d.name}`, dnsName: d.dnsName, targets: d.targets, ready: d.state ? d.state === 'Ready' : null })),
       loadBalancers: lbs.map(s => {
         const a = s.metadata.annotations || {};
         const ingress = ((s.status || {}).loadBalancer || {}).ingress || [];
@@ -634,8 +617,6 @@ function networkPath({ shootInfo, services, pods, nodes, dnsEntries, envoyFilter
       routes: routesUnavailable ? null : routes.length
     },
     egress: {
-      natIps: info.unavailable ? null : info.natIps,
-      natCidrs: info.unavailable ? null : info.natCidrs,
       egressGateway: pods && pods.unavailable ? null : podItems.some(p => ((p.metadata.labels || {}).istio) === 'egressgateway'),
       serviceEntries: !serviceEntries || serviceEntries.unavailable ? null : (serviceEntries.items || []).length,
       outboundPolicy: outboundPolicyOf(meshConfig),
@@ -652,7 +633,7 @@ function networkPath({ shootInfo, services, pods, nodes, dnsEntries, envoyFilter
  * External upstreams the sidecars in the sample connected to, with the name the index gives each.
  * `null` when no sidecar outside the ingress tier was read, so "none observed" is never a guess.
  */
-function observedEgress(records, { ingressKeys, isPrivate, splitHostPort, nameOf, isTelemetryExporter, nameIndex, maxRows = 25 }) {
+function observedEgress(records, { ingressKeys, isPrivate, splitHostPort, nameOf, nameIndex, maxRows = 25 }) {
   const out = records.filter(r => !ingressKeys.has(`${r.proxy.namespace}/${r.proxy.pod}`));
   if (!out.length) return null;
   const byIp = new Map();
@@ -667,9 +648,7 @@ function observedEgress(records, { ingressKeys, isPrivate, splitHostPort, nameOf
   return [...byIp.values()]
     .map(r => {
       const callers = [...r.callers].sort();
-      // Named by caller only when every caller is a telemetry exporter: the export is theirs.
-      const refs = callers.map(c => ({ namespace: c.split('/')[0], name: c.split('/')[1] }));
-      const n = nameOf(nameIndex, r.ip, { caller: refs.every(isTelemetryExporter) ? refs[0] : null });
+      const n = nameOf(nameIndex, r.ip);
       return { ip: r.ip, display: n ? n.display : null, source: n ? n.source : null, requests: r.requests, callers: callers.slice(0, 5), callersTotal: callers.length };
     })
     .sort((a, b) => b.requests - a.requests || a.ip.localeCompare(b.ip))
@@ -685,7 +664,6 @@ export default {
   edgeClasses,
   hostClass,
   certificateRows,
-  dnsEntryRows,
   hostChain,
   istioVersionOf,
   envoyFilterRows,
@@ -694,7 +672,7 @@ export default {
   errorBucket,
   attentionOf,
   routeAdmits,
-  shootInfoOf,
+  clusterFactsOf,
   outboundPolicyOf,
   networkPath,
   edgeMetaOf,

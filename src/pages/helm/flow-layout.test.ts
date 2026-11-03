@@ -17,11 +17,11 @@ function edge(from: string, to: string, type: HelmGraphEdge['type']): HelmGraphE
   return { id: `${from}->${to}:${type}`, from, to, type, evidence: 'test', explanation: 'test' };
 }
 
-/** A release shaped like the real one: an APIRule into approuter, a second Service behind it. */
+/** A release shaped like the real one: an HTTPRoute into approuter, a second Service behind it. */
 function releaseGraph(): { nodes: HelmGraphNode[]; edges: HelmGraphEdge[] } {
   const nodes = [
     node('release', 'HelmRelease', 'Helm Release'),
-    node('rule', 'APIRule', 'Networking'),
+    node('rule', 'HTTPRoute', 'Networking'),
     node('svc-approuter', 'Service', 'Networking'),
     node('svc-srv', 'Service', 'Networking'),
     node('deploy-approuter', 'Deployment'),
@@ -71,7 +71,7 @@ describe('ingress tiers', () => {
   const { nodes, edges } = releaseGraph();
   const columns = flowColumns(nodes, edges).columns;
 
-  it('puts the APIRule at the head of the picture', () => {
+  it('puts the HTTPRoute at the head of the picture', () => {
     expect(columns.get('rule')).toBe(0);
   });
 

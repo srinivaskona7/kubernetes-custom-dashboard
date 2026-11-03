@@ -7,27 +7,27 @@ import type { IngressCertificate, IngressGatewayServer, IngressRejection, Traffi
 import { gatewayServerMatches, listenersFocus, peerAuthRow, rejectionMatches, serverExpiry, tlsTone } from './listeners-view';
 
 const server = (over: Partial<IngressGatewayServer> = {}): IngressGatewayServer => ({
-  key: 'kyma-system/kyma-gateway/0',
-  name: 'kyma-gateway',
-  namespace: 'kyma-system',
+  key: 'platform-system/main-gateway/0',
+  name: 'main-gateway',
+  namespace: 'platform-system',
   selector: { istio: 'ingressgateway' },
   port: 443,
   portName: 'https',
   protocol: 'HTTPS',
   tlsMode: 'SIMPLE',
-  credentialName: 'kyma-gateway-certs',
+  credentialName: 'main-gateway-certs',
   minProtocolVersion: null,
   httpsRedirect: false,
-  hosts: ['*.c-9d0a141.kyma.ondemand.com'],
+  hosts: ['*.c-9d0a141.apps.example.com'],
   ...over
 });
 
 const cert = (over: Partial<IngressCertificate> = {}): IngressCertificate => ({
   namespace: 'istio-system',
-  name: 'kyma-gateway-certs',
-  secretName: 'kyma-gateway-certs',
+  name: 'main-gateway-certs',
+  secretName: 'main-gateway-certs',
   commonName: null,
-  dnsNames: ['*.c-9d0a141.kyma.ondemand.com'],
+  dnsNames: ['*.c-9d0a141.apps.example.com'],
   expires: '2026-12-01T00:00:00Z',
   daysLeft: 66,
   ready: true,
@@ -106,7 +106,7 @@ describe('serverExpiry', () => {
 describe('table searches', () => {
   test('a Gateway server matches on its name, port, protocol, mode, Secret name and hosts', () => {
     const g = server();
-    for (const q of ['kyma-system/kyma', '443', 'https', 'simple', 'gateway-certs', 'ondemand', '']) {
+    for (const q of ['platform-system/main', '443', 'https', 'simple', 'gateway-certs', 'apps.example', '']) {
       expect(gatewayServerMatches(g, q), q).toBe(true);
     }
     expect(gatewayServerMatches(g, 'nothing-like-it')).toBe(false);
@@ -152,7 +152,7 @@ describe('listenersFocus', () => {
   });
 
   test('a Secret name narrows Gateway servers to the servers that name it, and selects the first', () => {
-    expect(listenersFocus(ingress, 'kyma-gateway-certs')).toEqual({ table: 'servers', key: 'kyma-system/kyma-gateway/0', serverSearch: 'kyma-gateway-certs' });
+    expect(listenersFocus(ingress, 'main-gateway-certs')).toEqual({ table: 'servers', key: 'platform-system/main-gateway/0', serverSearch: 'main-gateway-certs' });
   });
 
   test('a name nothing holds leaves every table unfiltered, never an empty one', () => {

@@ -202,7 +202,7 @@ describe('the warming sweep', () => {
     failPaths.add(TRAFFIC_URL);
     prefetch.start('c1', 'overview');
     await drainSweep();
-    expect(paths()).toContain('/clusters/c1/policy');
+    expect(paths()).toContain('/clusters/c1/security');
   });
 
   it('does not restart a sweep that is already running for the same cluster', async () => {
@@ -367,12 +367,12 @@ describe('hover-intent warming', () => {
 
 describe('GET coalescing', () => {
   it('serves two simultaneous callers of one route from a single request', async () => {
-    // Not hypothetical: the Security tab renders two independent sections that each call
-    // `api.clusterPolicy(id)`, so one screen used to issue two 80 KB reads.
-    const both = Promise.all([api.clusterPolicy('c1'), api.clusterPolicy('c1')]);
+    // Not hypothetical: a tab that renders two independent sections each calling the same
+    // client method used to issue the same read twice for one screen.
+    const both = Promise.all([api.clusterSecurity('c1'), api.clusterSecurity('c1')]);
     await vi.advanceTimersByTimeAsync(0);
     await both;
-    expect(paths().filter(p => p === '/clusters/c1/policy')).toHaveLength(1);
+    expect(paths().filter(p => p === '/clusters/c1/security')).toHaveLength(1);
   });
 
   it('upgrades past a low-priority prefetch instead of joining it', async () => {
@@ -416,9 +416,9 @@ describe('GET coalescing', () => {
     // Coalescing shares an in-flight promise, never a stored response. A second read after
     // the first completed must actually go to the server, or this would be a cache with none
     // of a cache's staleness rules.
-    await api.clusterPolicy('c1');
-    await api.clusterPolicy('c1');
-    expect(paths().filter(p => p === '/clusters/c1/policy')).toHaveLength(2);
+    await api.clusterSecurity('c1');
+    await api.clusterSecurity('c1');
+    expect(paths().filter(p => p === '/clusters/c1/security')).toHaveLength(2);
   });
 
   it('never shares a request that carries a method or a body', async () => {

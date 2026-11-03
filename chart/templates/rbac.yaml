@@ -1,0 +1,142 @@
+{{- if .Values.rbac.create -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "k8s-fleet-dashboard.clusterRoleName" . }}
+  labels:
+    {{- include "k8s-fleet-dashboard.labels" . | nindent 4 }}
+rules:
+  # Core objects the dashboard lists. Secrets are handled separately below.
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - nodes
+      - pods
+      - pods/log
+      - services
+      - endpoints
+      - events
+      - configmaps
+      - serviceaccounts
+      - persistentvolumes
+      - persistentvolumeclaims
+      - resourcequotas
+      - limitranges
+      - replicationcontrollers
+    verbs: ["get", "list", "watch"]
+  {{- if .Values.rbac.readSecrets }}
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  {{- end }}
+  - apiGroups: ["apps"]
+    resources:
+      - deployments
+      - statefulsets
+      - daemonsets
+      - replicasets
+      - controllerrevisions
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets", "podsecuritypolicies"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses", "volumeattachments", "csidrivers", "csinodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "ingressclasses", "networkpolicies"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources:
+      - roles
+      - rolebindings
+      - clusterroles
+      - clusterrolebindings
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apiextensions.k8s.io"]
+    resources: ["customresourcedefinitions"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apiregistration.k8s.io"]
+    resources: ["apiservices"]
+    verbs: ["get", "list", "watch"]
+  # metrics-server, if installed. A 404 simply hides the usage panels.
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+  # Optional: standard Gateway API. Absent on most clusters; that is not an error.
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways", "httproutes", "gatewayclasses", "referencegrants"]
+    verbs: ["get", "list", "watch"]
+  # Optional: Istio. Absent unless a service mesh is installed.
+  - apiGroups: ["networking.istio.io"]
+    resources: ["virtualservices", "gateways", "destinationrules", "serviceentries", "sidecars", "envoyfilters"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["security.istio.io"]
+    resources: ["peerauthentications", "authorizationpolicies", "requestauthentications"]
+    verbs: ["get", "list", "watch"]
+  # Optional: cert-manager.
+  - apiGroups: ["cert-manager.io"]
+    resources: ["certificates", "issuers", "clusterissuers", "certificaterequests"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "k8s-fleet-dashboard.clusterRoleName" . }}
+  labels:
+    {{- include "k8s-fleet-dashboard.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "k8s-fleet-dashboard.clusterRoleName" . }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "k8s-fleet-dashboard.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# The app persists the fleet registry into a Secret in its own namespace. That
+# write is namespaced and name-scoped so the cluster-wide grant above stays
+# read-only.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "k8s-fleet-dashboard.fullname" . }}-registry-writer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "k8s-fleet-dashboard.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames:
+      - {{ default "fleet-dashboard-tokens" .Values.registry.tokensSecret | quote }}
+      - {{ default "fleet-dashboard-clusters" .Values.registry.clustersSecret | quote }}
+    verbs: ["get", "patch", "update"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "k8s-fleet-dashboard.fullname" . }}-registry-writer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "k8s-fleet-dashboard.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "k8s-fleet-dashboard.fullname" . }}-registry-writer
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "k8s-fleet-dashboard.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

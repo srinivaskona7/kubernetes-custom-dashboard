@@ -88,7 +88,7 @@ export function TopNamespaces({
       header: 'Namespace',
       pin: true,
       // The ranking has the section's full width, so the longest platformsbx name
-      // (`sap-transp-proxy-system`, 23 characters) fits beside its "N pods · Pods" line.
+      // (`connectivity-proxy-sys`, 22 characters) fits beside its "N pods · Pods" line.
       width: '280px',
       min: '280px',
       max: '280px',

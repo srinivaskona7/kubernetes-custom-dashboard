@@ -25,7 +25,7 @@ const NOW = Math.floor(Date.parse('2026-09-01T10:00:00Z') / 1000);
 /** Build a token the way the API server does, minus the signature we never check. */
 function makeToken(claims = {}, { segments = 3 } = {}) {
   const body = {
-    sub: 'system:serviceaccount:kyma-fleet:fleet-reader',
+    sub: 'system:serviceaccount:fleet-dashboard:fleet-reader',
     iss: 'https://kubernetes.default.svc',
     iat: NOW,
     exp: NOW + 24 * HOUR,
@@ -41,7 +41,7 @@ function makeToken(claims = {}, { segments = 3 } = {}) {
 
 test('the namespace and service account are read off the token, not asked for', () => {
   const claims = saToken.decode(makeToken());
-  assert.equal(claims.namespace, 'kyma-fleet');
+  assert.equal(claims.namespace, 'fleet-dashboard');
   assert.equal(claims.serviceAccount, 'fleet-reader');
 });
 
@@ -52,7 +52,7 @@ test('the expiry is the token\'s own, not a duration we assumed', () => {
 
 test('surrounding whitespace from a copy-paste is tolerated', () => {
   const claims = saToken.decode(`  ${makeToken()}\n`);
-  assert.equal(claims.namespace, 'kyma-fleet');
+  assert.equal(claims.namespace, 'fleet-dashboard');
 });
 
 test('whitespace inside means the command line was pasted, and the message says so', () => {

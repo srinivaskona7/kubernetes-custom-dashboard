@@ -30,7 +30,7 @@ const CA_PEM = '-----BEGIN CERTIFICATE-----\nMIIByDCCAW6gAwIBAgIUZm9vYmFy\n-----
 const SERVER = 'https://api.collision-test.invalid';
 const OTHER_SERVER = 'https://api.attacker-collision-test.invalid';
 
-function saJwt({ namespace = 'kyma-fleet', serviceAccount = 'fleet-reader', expSeconds = 24 * 3600 } = {}) {
+function saJwt({ namespace = 'fleet-dashboard', serviceAccount = 'fleet-reader', expSeconds = 24 * 3600 } = {}) {
   const b64 = obj => Buffer.from(JSON.stringify(obj), 'utf8').toString('base64url');
   return [
     b64({ alg: 'RS256', typ: 'JWT' }),

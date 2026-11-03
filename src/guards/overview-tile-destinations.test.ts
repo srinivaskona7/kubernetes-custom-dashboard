@@ -131,12 +131,13 @@ function parseTopics(name) {
  * The tile count, pinned low and high.
  *
  * Low because a parser that matches nothing passes every destination check below it. High because
- * the grid was deliberately cut from eighteen cells to seven pillars, and the failure mode of an
+ * the grid was deliberately cut from eighteen cells to a handful of pillars (five since the modules
+ * tile went with the Modules & Telemetry tab), and the failure mode of an
  * Overview is re-accretion: each new summary group arrives with an obvious argument for its own
  * tile, and eighteen is what that looks like after eleven of those arguments win. Crossing this
  * ceiling should be a decision someone writes down here, not a diff nobody notices.
  */
-const MIN_TILES = 6;
+const MIN_TILES = 5;
 const MAX_TILES = 8;
 
 test('every TAB_SECTIONS key is a real tab, and every list is rendered by something', () => {

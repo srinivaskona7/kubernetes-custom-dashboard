@@ -29,10 +29,6 @@ const { createLogShare } = proxyLogShareModule;
 import registryShareModule from './collectors/registry-share.js';
 const { createRegistryShare } = registryShareModule;
 import mesh from './collectors/mesh.js';
-import modules from './collectors/modules.js';
-import btp from './collectors/btp.js';
-import policy from './collectors/policy.js';
-import opa from './collectors/opa.js';
 import capacity from './collectors/capacity.js';
 import cost from './collectors/cost.js';
 import reliability from './collectors/reliability.js';
@@ -40,11 +36,6 @@ import observability from './collectors/observability.js';
 import helm from './collectors/helm.js';
 import helmRelated from './collectors/helm-related.js';
 import resourceYaml from './collectors/resource-yaml.js';
-// platform.js is what backs /integrity: apiservice aggregation health and served-version
-// drift for the two groups (apiregistration.k8s.io, cert.gardener.cloud) this dashboard
-// itself depends on staying reachable — "integrity" of the control plane surface, not of
-// an individual workload.
-import platform from './collectors/platform.js';
 import crypto from 'node:crypto';
 import zlib from 'node:zlib';
 import fanoutModule from './fanout.js';
@@ -82,15 +73,15 @@ const MIN_GZIP_BYTES = 1024;
  * Hosts the signed-in operator's own bearer token may be forwarded to, as a comma-separated
  * list. Unset or empty means OFF, and OFF is the default.
  *
- * Why an allowlist at all: an OIDC cluster is read with the caller's Shield token, and
+ * Why an allowlist at all: an OIDC cluster is read with the caller's SSO token, and
  * `apiUrl` is a field of a cluster record that any authenticated caller can create. Without
  * this gate, registering one cluster pointed at a host you control makes every other
  * operator's dashboard post their SSO bearer to you on their next page load. With it off,
  * such a cluster is read with the fleet service-account token instead and fanout.js reports
  * the substitution through `authFallback`, so the UI can still explain the difference.
  *
- * Little is lost by defaulting to off: the app's Shield token is issued for this application,
- * not for a Kyma apiserver — wrong issuer, wrong audience — so it is not a credential the
+ * Little is lost by defaulting to off: the app's SSO token is issued for this application,
+ * not for a cluster apiserver — wrong issuer, wrong audience — so it is not a credential the
  * cluster would accept anyway, and forwarding it broadly is disclosure without benefit. The
  * allowlist exists for a deployment where an operator has deliberately arranged for it to
  * work, and naming those hosts is a chart change, never a request body.
@@ -208,7 +199,7 @@ function apiUrlRejection(apiUrl) {
  * Writes are gated on the admin scope, and that is the default. Two ways to be off, both
  * deliberate and both logged: FLEET_AUTH=none, which is local development only and which
  * server/index.js refuses to start with under NODE_ENV=production; and an explicit
- * FLEET_REQUIRE_ADMIN_SCOPE=false for a deployment whose role collection is not assigned yet.
+ * FLEET_REQUIRE_ADMIN_SCOPE=false for a deployment whose admin group is not assigned yet.
  *
  * Read per call rather than captured, so the answer never disagrees with the environment.
  */
@@ -349,11 +340,11 @@ const oidcFlows = new Map();
 /**
  * Where the console is served, so the SSO callback can hand the browser back to it.
  *
- * The approuter mounts the compiled UI at this path from `localDir`, and vite's dev server uses
- * the same `base`, so one relative path is correct in both. Overridable for a deployment that
+ * The server mounts the compiled UI at this path, and vite's dev server uses the same `base`
+ * (`VITE_BASE_PATH`, `/` by default), so one relative path is correct in both. Overridable for a deployment that
  * mounts it elsewhere; a trailing slash is trimmed so the join below cannot double it.
  */
-const UI_BASE_PATH = (process.env.FLEET_UI_BASE_PATH || '/kyma-fleet-dashboard').replace(/\/+$/, '');
+const UI_BASE_PATH = (process.env.FLEET_UI_BASE_PATH || '').replace(/\/+$/, '');
 
 /**
  * Finish the SSO callback in whatever way suits whoever asked.
@@ -394,7 +385,7 @@ function finishOidcCallback(req, res, status, payload, params) {
  *
  * One expression, used both to build the authorization URL and to tell the console what to show
  * an administrator — because the *only* thing that makes this URI useful is that it is character
- * for character the one the issuer will be sent. IAS matches it as an exact string: a trailing
+ * for character the one the issuer will be sent. The issuer matches it as an exact string: a trailing
  * slash is enough to be refused (measured against the live tenant), so a hand-typed copy in the
  * UI would eventually differ from the real one and send an operator to their admin with a URI
  * that cannot work.
@@ -402,11 +393,11 @@ function finishOidcCallback(req, res, status, payload, params) {
  * Configured, not derived — with a derivation only as a development convenience.
  *
  * Deriving it from the request looked right and is wrong in the one topology that matters. The
- * approuter strips `Host` before proxying unless a destination sets `preserveHostHeader`, so
+ * reverse proxy in front of the pod commonly rewrites `Host` before proxying, so
  * `req.get('host')` in the deployed pod is the internal service address and `req.protocol` is
  * `http`; the operator would be told to register
  * `http://...svc.cluster.local:8080/...` and the issuer would refuse the flow forever. The
- * forwarded headers are no better here: the APIRule in front of this deployment injects its own
+ * forwarded headers are no better here: the ingress in front of this deployment may inject its own
  * `x-forwarded-host`, so trusting them swaps one wrong exact-string for another.
  *
  * Hence `FLEET_SSO_CALLBACK_URL`, which must be set to the exact browser-facing callback URL
@@ -730,7 +721,7 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
     const token = (allowed ? bearerFrom(req) : undefined) || tokens.tokenFor(cluster.id);
     if (!token) {
       throw new ClusterError(UNSEEDED, oidc
-        ? `${cluster.id} is configured for OIDC / AppleConnect SSO but has no usable credential: ` +
+        ? `${cluster.id} is configured for OIDC SSO but has no usable credential: ` +
           (allowed
             ? 'no user session token was received'
             : `its host is not listed in ${OIDC_PASSTHROUGH_HOSTS_ENV}, so your session token is not forwarded to it`) +
@@ -747,7 +738,7 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
    *
    * auth.js grants it to members of FLEET_ADMIN_GROUPS (and to the local-development
    * identity). A qualified `<app>.${SCOPE}` spelling is also accepted, and the comparison is
-   * on the qualified suffix rather than a substring — `tenant.evil-kyma-fleet-admin` must not
+   * on the qualified suffix rather than a substring — `tenant.evil-fleet-admin` must not
    * pass, and it does not, because the dot is part of what has to match.
    */
   const hasAdminScope = req => {
@@ -760,7 +751,7 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
    *
    * Onboarding is the entry point for the whole OIDC-passthrough attack — `apiUrl` is only
    * dangerous because anyone who can reach the API can set it — and removal and renewal are
-   * privileged in their own right. Reaching /api/fleet at all requires a Shield identity in
+   * privileged in their own right. Reaching /api/fleet at all requires a verified identity in
    * ALLOWED_GROUPS; changing the fleet additionally requires membership of FLEET_ADMIN_GROUPS.
    */
   const requireAdmin = (req, res, next) => {
@@ -801,7 +792,7 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
    * `k8s.js` already asks Kubernetes for gzip on the way *in* — that is a different hop, and it
    * was the one measured. On the way *out* the fleet API was sending every body uncompressed:
    * `/clusters/:id/overview` measured 417 kB, `/workloads` 367 kB, `/policy` 83 kB. On localhost
-   * that costs nothing and hid for exactly that reason; over the internet to an approuter it is
+   * that costs nothing and hid for exactly that reason; over the internet through a reverse proxy it is
    * the dominant term in how long a tab takes to appear, and no amount of server-side caching
    * touches it. These bodies are repetitive JSON, so gzip returns roughly a tenth of the bytes.
    *
@@ -1367,7 +1358,7 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
    * Rollout progress. A GET, and the only rollout route that remains.
    *
    * The `POST .../restart` and `POST .../scale` routes that used to bracket it are removed.
-   * Kyma Fleet is a strictly read-only observability and investigation platform: it must never
+   * The fleet dashboard is a strictly read-only observability and investigation platform: it must never
    * mutate cluster state, so the write half of this surface is gone from the server as well as
    * the UI. Leaving the routes standing with no caller would have been a latent write path one
    * curl away, which is exactly the thing the read-only guarantee is supposed to rule out.
@@ -1390,7 +1381,8 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
     const results = await cached(req, scoped(req, 'networking'), () =>
       runFanOut({ req, collect: ctx => networking.collect({ ...ctx, ...ctxExtras }) }));
 
-    const apirules = results.flatMap(r => (r.ok ? (r.data.apirules || []).map(x => ({ ...x, clusterId: r.cluster.id })) : []));
+    const httproutes = results.flatMap(r => (r.ok ? (r.data.httproutes || []).map(x => ({ ...x, clusterId: r.cluster.id })) : []));
+    const gateways = results.flatMap(r => (r.ok ? (r.data.gateways || []).map(x => ({ ...x, clusterId: r.cluster.id })) : []));
     const virtualservices = results.flatMap(r => (r.ok ? (r.data.virtualservices || []).map(x => ({ ...x, clusterId: r.cluster.id })) : []));
     const ingresses = results.flatMap(r => (r.ok ? (r.data.ingresses || []).map(x => ({ ...x, clusterId: r.cluster.id })) : []));
     const services = results.flatMap(r => (r.ok ? (r.data.services || []).map(x => ({ ...x, clusterId: r.cluster.id })) : []));
@@ -1403,13 +1395,15 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
         // no per-cluster breakdown. The UI prefers the per-cluster lists on the slots in
         // `clusters` and only falls back to this one, so carrying both never double-counts.
         ...completenessUnion(results),
-        totalApirules: apirules.length,
+        totalHttpRoutes: httproutes.length,
+        totalGateways: gateways.length,
         totalVirtualServices: virtualservices.length,
         totalIngresses: ingresses.length,
         totalServices: services.length
       },
       clusters: results.map(r => clusterSlot(r)),
-      apirules,
+      httproutes,
+      gateways,
       virtualservices,
       ingresses,
       services,
@@ -1685,12 +1679,12 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
     res.json(result);
   }));
 
-  // -------------------------------------------------- the seven Wave-1 collectors (+ integrity)
+  // -------------------------------------------------- the per-cluster group collectors
 
   /**
    * A generic fleet-wide + per-cluster route pair, for the collectors whose result is one
    * rich object per cluster rather than a handful of flat lists worth flattening into a
-   * fleet-level table (the way /networking or /storage do for apirules or pvcs). Each
+   * fleet-level table (the way /networking or /storage do for ingresses or pvcs). Each
    * cluster's whole `data` rides on its slot via `clusterSlot(r, { data: r.data })` — the
    * UI reads the real per-cluster payload, and no count is ever recomputed here, so there
    * is nothing for this route to get out of sync with the collector's own summary.
@@ -1724,50 +1718,6 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
   }
 
   registerGroupRoutes('mesh', 'mesh', ctx => mesh.collect(ctx));
-  registerGroupRoutes('modules', 'modules', ctx => modules.collect(ctx));
-  registerGroupRoutes('btp-services', 'btp-services', ctx => btp.collect(ctx));
-  registerGroupRoutes('policy', 'policy', ctx => policy.collect(ctx));
-  // OPA Gatekeeper inspection. A sibling of `policy` rather than a field on it: `policy` is the
-  // fleet-wide admission VERDICT that the overview tiles and /report consume, and it is read on
-  // almost every screen. This is the per-policy detail — match scopes, parameters, audit
-  // violations — and only the OPA screen asks for it. Nesting it under `opa/` leaves room for
-  // `opa/decisions` below without renaming either.
-  registerGroupRoutes('opa', 'opa', ctx => opa.collect(ctx));
-
-  /**
-   * Whether this cluster has any source of RUNTIME admission decisions, and which knob is off.
-   *
-   * Its own route because it is its own question and its own two reads, and because the Decision
-   * Activity tab is the only screen that asks it — folding it into `/opa` would make every OPA
-   * screen pay for a Deployment read whose answer is nearly always "no source is wired".
-   */
-  registerGroupRoutes('opa/decisions', 'opa-decisions', ctx => opa.decisions(ctx));
-
-  /**
-   * The live YAML of one ConstraintTemplate, and of one Constraint under it.
-   *
-   * Deliberately NOT a generic `/raw/:group/:version/:plural/:name`: the Kind is a constant in
-   * opa.js, not a path parameter, so this route cannot be pointed at a Secret. See the note on
-   * `opa.manifest`. Fetched only when the YAML tab of a policy drawer opens.
-   */
-  router.get('/clusters/:id/opa/policies/:template/yaml', wrap(async (req, res) => {
-    const cluster = requireCluster(req);
-    const { template } = req.params;
-    const constraint = typeof req.query.constraint === 'string' ? req.query.constraint : null;
-    const [result] = await cached(req,
-      scoped(req, `opa-yaml:${cluster.id}:${template}:${constraint || '-'}`),
-      () => runFanOut({
-        req, only: [cluster.id],
-        collect: ctx => opa.manifest({ ...ctx, ...ctxExtras, template, constraint })
-      })
-    );
-    // Reached from a link, so a policy that has been removed since the list was drawn answers
-    // 404 and reads as deleted rather than as an unreachable cluster.
-    if (result && result.ok === false && result.error && result.error.code === 'NOT_FOUND') {
-      return res.status(404).json(result.error);
-    }
-    res.json(result);
-  }));
 
   registerGroupRoutes('capacity', 'capacity', ctx => capacity.collect(ctx));
   /**
@@ -1780,7 +1730,6 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
   registerGroupRoutes('cost', 'cost', ctx => cost.collect(ctx));
   registerGroupRoutes('reliability', 'reliability', ctx => reliability.collect(ctx));
   registerGroupRoutes('observability', 'observability', ctx => observability.collect(ctx));
-  registerGroupRoutes('integrity', 'integrity', ctx => platform.collect(ctx));
   // Nested path on purpose: `helm` is a topic that will grow (history, diffs), and
   // `/clusters/:id/helm/releases` leaves room for siblings under it without renaming this one.
   registerGroupRoutes('helm/releases', 'helm-releases', ctx => helm.collect(ctx));
@@ -1898,27 +1847,25 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
   }));
 
   router.get('/drift', wrap(async (req, res) => {
-    // Reuse the exact cache entries /clusters, /workloads and /modules already mint for
+    // Reuse the exact cache entries /clusters and /workloads already mint for
     // the same cluster in the same request window, rather than minting drift's own
     // 'drift:health'/'drift:workloads' copies. A /report call that also hits /drift used
     // to trigger eight redundant reads per cluster for data already sitting in the cache;
     // sharing the key means whichever route asks first warms it for the other.
-    const [healthRes, workloadsRes, modulesRes] = await Promise.all([
+    const [healthRes, workloadsRes] = await Promise.all([
       cached(req, scoped(req, 'clusters'), () =>
         runFanOut({ req, collect: ctx => health.collect({ ...ctx, ...ctxExtras }) })),
       cached(req, scoped(req, 'workloads'), () =>
-        runFanOut({ req, collect: ctx => workloads.collect({ ...ctx, ...ctxExtras }) })),
-      cached(req, scoped(req, 'modules'), () =>
-        runFanOut({ req, collect: ctx => modules.collect({ ...ctx, ...ctxExtras }) }))
+        runFanOut({ req, collect: ctx => workloads.collect({ ...ctx, ...ctxExtras }) }))
     ]);
 
     // 1. Cluster & K8s version parity
     const k8sVersionsFound = new Set();
-    // Drift reads three collectors per cluster, so a cluster's completeness is the union of
-    // all three — a workload list or module read that was refused makes the comparisons
-    // below partial just as surely as a refused node list does.
+    // Drift reads two collectors per cluster, so a cluster's completeness is the union of
+    // both — a workload list that was refused makes the comparisons below partial just as
+    // surely as a refused node list does.
     const driftCompleteness = id => completenessUnion(
-      [...healthRes, ...workloadsRes, ...modulesRes].filter(r => r.cluster.id === id)
+      [...healthRes, ...workloadsRes].filter(r => r.cluster.id === id)
     );
     const clusterParity = healthRes.map(r => {
       const v = r.ok && r.data ? (r.data.kubernetesVersion || (r.data.kubernetesVersions && r.data.kubernetesVersions[0]) || 'unknown') : 'unreachable';
@@ -1976,55 +1923,20 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
       return { ...item, isDrifted };
     });
 
-    // 3. Kyma Core Modules Parity — sourced from modules.js's own Kyma CR read, the only
-    // authoritative account of which Kyma modules are installed and in what state. The old
-    // logic guessed at this from Deployment name substrings ('istio', 'keda', 'fluent', ...)
-    // against `workloads.js`, which is exactly the kind of guess this dashboard forbids
-    // elsewhere — a customer running their own unrelated 'my-eventing-adapter' Deployment
-    // would have been silently counted as the Eventing module.
-    const moduleNames = new Set();
-    for (const r of modulesRes) {
-      if (!r.ok || !r.data) continue;
-      for (const kyma of r.data.kymas || []) {
-        for (const m of modules.joinModules(kyma)) moduleNames.add(m.name);
-      }
-    }
-
-    const moduleParity = [...moduleNames].sort().map(name => {
-      const clusterStatus = {};
-      for (const r of modulesRes) {
-        if (!r.ok || !r.data) {
-          clusterStatus[r.cluster.id] = { status: 'unknown', installed: false };
-          continue;
-        }
-        const found = (r.data.kymas || [])
-          .flatMap(kyma => modules.joinModules(kyma))
-          .find(m => m.name === name);
-        clusterStatus[r.cluster.id] = found
-          ? { status: found.state || 'unknown', installed: true, version: found.version || undefined, channel: found.channel || undefined }
-          : { status: 'missing', installed: false };
-      }
-      const installedStatuses = Object.values(clusterStatus).map(s => s.status);
-      return { module: name, clusterStatus, isDrifted: new Set(installedStatuses).size > 1 };
-    });
-
     res.json({
       summary: {
         totalWorkloadsCompared: driftItems.length,
         driftedWorkloadsCount: driftItems.filter(d => d.isDrifted).length,
         totalClusters: healthRes.length,
         unreachable: healthRes.filter(r => !r.ok).length,
-        // All three sweeps, unioned: a drift verdict computed over a cluster whose workload
-        // or module list was refused compares against nothing and would otherwise read as
-        // "no drift".
-        ...completenessUnion([...healthRes, ...workloadsRes, ...modulesRes]),
+        // Both sweeps, unioned: a drift verdict computed over a cluster whose workload list
+        // was refused compares against nothing and would otherwise read as "no drift".
+        ...completenessUnion([...healthRes, ...workloadsRes]),
         k8sVersions: [...k8sVersionsFound],
-        hasK8sDrift,
-        driftedModulesCount: moduleParity.filter(m => m.isDrifted).length
+        hasK8sDrift
       },
       items: driftItems,
       clusterParity,
-      moduleParity,
       collectedAt: stamp(req)
     });
   }));
@@ -2186,7 +2098,7 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
     // request-body fields, and one carrying a newline would forge report lines for clusters
     // that do not exist. Counts and scores are computed here and need no escaping.
     const reportMarkdown = [
-      `# Kyma Fleet Audit & Health Report`,
+      `# Kubernetes Fleet Audit & Health Report`,
       `Generated at: ${new Date().toISOString()}`,
       `\n## Fleet Clusters Summary`,
       `Total Clusters: ${healthRes.length}`,
@@ -2211,7 +2123,7 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
     ].join('\n');
 
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="kyma-fleet-report.md"');
+    res.setHeader('Content-Disposition', 'attachment; filename="fleet-report.md"');
     res.send(reportMarkdown);
   }));
 
@@ -2249,13 +2161,9 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
     { key: 'certificates', cacheKey: 'certificates', clusterKey: id => `cert:${id}`, collect: ctx => certificates.collect(ctx) },
     { key: 'topology', cacheKey: 'topology', clusterKey: id => `topo:${id}`, collect: ctx => topology.collect(ctx) },
     { key: 'mesh', cacheKey: 'mesh', collect: ctx => mesh.collect(ctx) },
-    { key: 'modules', cacheKey: 'modules', collect: ctx => modules.collect(ctx) },
-    { key: 'btpServices', cacheKey: 'btp-services', collect: ctx => btp.collect(ctx) },
-    { key: 'policy', cacheKey: 'policy', collect: ctx => policy.collect(ctx) },
     { key: 'capacity', cacheKey: 'capacity', collect: ctx => capacity.collect(ctx) },
     { key: 'reliability', cacheKey: 'reliability', collect: ctx => reliability.collect(ctx) },
-    { key: 'observability', cacheKey: 'observability', collect: ctx => observability.collect(ctx) },
-    { key: 'integrity', cacheKey: 'integrity', collect: ctx => platform.collect(ctx) }
+    { key: 'observability', cacheKey: 'observability', collect: ctx => observability.collect(ctx) }
   ];
 
   /**
@@ -2277,8 +2185,8 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
 
   /**
    * Best-effort 'is this resource type installed at all', read from whichever of a few
-   * conventions a collector's own payload already uses (`summary.kymaManaged`,
-   * `installed`, `prometheusOperator.installed`) — never guessed from a name or count.
+   * conventions a collector's own payload already uses (`installed`,
+   * `prometheusOperator.installed`) — never guessed from a name or count.
    * `null` (unknown, not "present") whenever no cluster's data exposes the concept, or
    * clusters disagree, since "half the fleet has it" is not an absence.
    */
@@ -2287,7 +2195,6 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
     if (!ok.length) return null;
     const flags = ok.map(r => {
       const summary = (r.data && r.data.summary) || {};
-      if (typeof summary.kymaManaged === 'boolean') return !summary.kymaManaged;
       if (r.data && typeof r.data.installed === 'boolean') return !r.data.installed;
       if (r.data && r.data.prometheusOperator && typeof r.data.prometheusOperator.installed === 'boolean') {
         return !r.data.prometheusOperator.installed;
@@ -2425,8 +2332,8 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
    *  - A baked id stays absolutely refused. `replace` does not open it.
    *  - Where the admin scope is not enforced, `replace: true` is available to any authenticated
    *    caller, because the whole route is. This makes the act deliberate and auditable; it does
-   *    not make it privileged. The privilege gate is `FLEET_REQUIRE_ADMIN_SCOPE=true` and a
-   *    `kyma-fleet-admin` role collection, and only that.
+   *    not make it privileged. The privilege gate is `FLEET_REQUIRE_ADMIN_SCOPE=true` and
+   *    membership of FLEET_ADMIN_GROUPS, and only that.
    */
   function collisionRejection(id, body, req) {
     if (!registry.get(id)) return null;
@@ -2790,7 +2697,7 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
     const challenge = base64url(crypto.createHash('sha256').update(verifier).digest());
     const nonce = base64url(crypto.randomBytes(16));
     const flowId = base64url(crypto.randomBytes(24));
-    // The known blocker: this exact URI must be pre-registered on the IAS client, or the
+    // The known blocker: this exact URI must be pre-registered on the OIDC client, or the
     // issuer will reject the redirect at step 2 — reported there as OIDC_ISSUER_ERROR,
     // never a silent hang.
     const redirectUri = oidcRedirectUri(req);
@@ -2838,7 +2745,7 @@ function createRouter({ registry, tokens, tokenWriter, clusterWriter, renewer, c
       authorizationUrl: authorizationUrl.toString(),
       expiresAt: new Date(oidcFlows.get(flowId).expiresAt).toISOString(),
       note: 'redirect the browser to authorizationUrl; the issuer calls back to ' +
-        `${redirectUri}, which must already be registered as a redirect URI on the IAS client`
+        `${redirectUri}, which must already be registered as a redirect URI on the OIDC client`
     });
   }));
 

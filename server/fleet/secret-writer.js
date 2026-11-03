@@ -19,12 +19,12 @@ class SecretTokenWriter {
    *          token?: string, caFile?: string, isClusterStore?: boolean}} [opts]
    */
   constructor(opts = {}) {
-    this.secretName = opts.secretName || process.env.FLEET_TOKENS_SECRET || 'kyma-fleet-tokens';
+    this.secretName = opts.secretName || process.env.FLEET_TOKENS_SECRET || 'fleet-dashboard-tokens';
     this.isClusterStore = Boolean(opts.isClusterStore || (opts.secretName && opts.secretName.includes('clusters')));
     this.namespace = opts.namespace
       || process.env.POD_NAMESPACE
       || readIfPresent(`${SA_DIR}/namespace`)
-      || 'kyma-fleet';
+      || 'fleet-dashboard';
     // In-cluster address.
     this.apiUrl = opts.apiUrl || process.env.KUBERNETES_API || 'https://kubernetes.default.svc';
     this.caFile = opts.caFile || `${SA_DIR}/ca.crt`;

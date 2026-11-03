@@ -42,8 +42,8 @@ export const EDGE_CLASS_LABEL: Record<EdgeClass, string> = {
 };
 
 export const EDGE_CLASS_WHY: Record<EdgeClass, string> = {
-  app: 'Routed by an APIRule or by a VirtualService outside the system namespaces. The only class whose errors and latency are your applications’.',
-  platform: 'Routed by a VirtualService in kyma-system or istio-system — the connectivity proxy, the Kyma gateway hosts. Real traffic, not yours.',
+  app: 'Routed by an Ingress, an HTTPRoute or a VirtualService outside the system namespaces. The only class whose errors and latency are your applications’.',
+  platform: 'Routed by a VirtualService in platform-system or istio-system — the connectivity proxy, the platform gateway hosts. Real traffic, not yours.',
   probe: 'The host the istio-healthz VirtualService routes: the load balancer’s health check. Usually most of the window, always 200.',
   'direct-ip': 'The Host header was an IP address or a name no Gateway server admits — somebody dialling the load balancer directly.',
   'policy-blocked': 'Envoy answered rbac_access_denied: an AuthorizationPolicy on the gateway refused it. The allowlist working, not a failure.',
@@ -158,7 +158,7 @@ export function attentionTarget<T extends string>(row: IngressAttention, section
 /**
  * Certificate attention follows the issuer (docs/specs/UI_SPEC.md §13a), the same rule as srv's
  * `attentionOf`: red when not Ready or under 7 days; amber when the issuer's renewal time has passed,
- * or — with no renewal time reported — under 30 days. Gardener renews at a third of a 90-day life,
+ * or — with no renewal time reported — under 30 days. cert-manager renews with a third of a 90-day life left,
  * so 39-66 days left with renewal pending is steady state, not a countdown. Unknown expiry is unknown.
  */
 export function certTone(c: Pick<IngressCertificate, 'daysLeft' | 'ready' | 'renewalOverdue'>): Tone {
@@ -292,7 +292,7 @@ export function chainLinks(h: IngressHost): ChainLink[] {
           tone: 'ok',
           why: h.servedBy.map(r => `${r.kind} ${r.namespace}/${r.name}`).join(', ')
         }
-      : { step: 'Route', text: 'no route', tone: missing, why: 'No VirtualService or APIRule declares this host.' }
+      : { step: 'Route', text: 'no route', tone: missing, why: 'No VirtualService, Ingress or HTTPRoute declares this host.' }
   );
   return links;
 }

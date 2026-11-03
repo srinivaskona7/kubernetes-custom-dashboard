@@ -1,316 +1,181 @@
-[![build](https://badges.pie.apple.com/badges/rio?p=ist-btp-platform-btp-kyma-fleet-dashboard&s=ist-btp-platform-btp-kyma-fleet-dashboard-app-build&l=build)](https://cloud.apple.com/dev/rio/projects/ist-btp-platform-btp-kyma-fleet-dashboard?pageIndex=0)
-[![deploy](https://badges.pie.apple.com/badges/rio?p=ist-btp-platform-btp-kyma-fleet-dashboard&s=ist-btp-platform-btp-kyma-fleet-dashboard-app-deploy&l=deploy)](https://cloud.apple.com/dev/rio/projects/ist-btp-platform-btp-kyma-fleet-dashboard?pageIndex=0)
+# Kubernetes Fleet Dashboard
 
-# Platform Foundation Btp Kyma Fleet Dashboard
+A read-only web console for a fleet of Kubernetes clusters. It talks to each
+cluster's API server using standard Kubernetes resources, so it runs unchanged
+against **EKS, AKS, GKE, kind, minikube and OpenShift**.
 
-A production-ready starter for BTP Platform teams building internal web applications on Apple infrastructure. It includes a React + Vite frontend with dark/light theme support, an Express backend with Pino structured logging, Shield OIDC authentication, Whisper secret management, and a Helm chart pre-configured for Narrative mTLS, Splunk log forwarding, and network policies. Clone it, run the setup script, and start building your app.
+One Node process serves both the REST API (`/api/fleet/*`) and the built React
+frontend. Storage is SQLite on a PersistentVolumeClaim.
 
-## Quick Start
+## What it reads
 
-```bash
-# 1. Create your project from the template
-gh repo create my-app-name --template <template-repo-url>
-cd my-app-name
+| Area | Source |
+|---|---|
+| Clusters, nodes, namespaces, pods, events | `v1` core API |
+| Workloads, rollouts, replica sets | `apps/v1`, `batch/v1` |
+| HPA, PDB | `autoscaling/v2`, `policy/v1` |
+| Ingress, NetworkPolicy, IngressClass | `networking.k8s.io/v1` |
+| Gateway, HTTPRoute | `gateway.networking.k8s.io/v1` (optional) |
+| VirtualService, Gateway, DestinationRule | `networking.istio.io/v1` (optional) |
+| Certificates | `cert-manager.io/v1` (optional) |
+| Storage classes, PVs, PVCs, quotas | `storage.k8s.io/v1`, `v1` |
+| Node and pod usage | `metrics.k8s.io` (optional — needs metrics-server) |
+| Helm releases | Secrets of type `helm.sh/release.v1` |
 
-# 2. Run the setup script to rename everything to your app
-./scripts/setup.sh my-app-name
+Optional groups are read best-effort: when the CRD is absent the panel reports
+"not installed" instead of failing the request. There are no Kyma, SAP BTP,
+Gardener, Kyverno, OPA/Gatekeeper or cloud-provider-specific dependencies.
 
-# 3. Install dependencies
-npm install
+The dashboard is **strictly read-only** with respect to workloads. It never
+scales, restarts or patches anything in a cluster. The only writes are to its
+own fleet registry Secret in its own namespace.
 
-# 4. Start the dev server (Express + Vite)
-npm run dev
+## Local development
 
-# 5. Open the app
-open http://localhost:5173
-```
-
-## First-Time Infrastructure Setup
-
-The Rio pipeline handles ECR repository and K8s namespace creation automatically on the first run. If you prefer to set them up manually or need to debug a failed first deploy:
-
-```bash
-# 1. Create the ECR repository (one-time)
-aws ecr create-repository \
-  --repository-name <app-name> \
-  --region us-west-2 \
-  --registry-id 637248970961
-
-# 2. Create the K8s namespace (one-time)
-kubectl create namespace <app-name>
-```
-
-The pipeline's `app-build` stage checks for the ECR repo before pushing, and `app-deploy` checks for the namespace before running Helm — both create them if missing.
-
-## What's Included
-
-- **React 18 + Vite frontend** with dark/light theme toggle and resizable sidebar
-- **Express backend** with Pino structured logging (JSON in prod, pretty in dev)
-- **Shield OIDC authentication** with JWT validation and group membership checks
-- **Whisper secret management** via mTLS (with local config fallback for development)
-- **Helm chart** with Narrative CSI volume, Splunk sidecar, network policies, and HPA
-- **Docker multi-stage build** on Apple UBI9 base image
-- **One-command deploy pipeline** (build, ECR push, Helm upgrade)
-- **Rio CI/CD pipeline** with PR builds, Docker publish to ECR, and auto-deploy to EKS
-
-## Project Structure
-
-```
-├── chart/                    # Helm chart
-│   ├── templates/
-│   │   ├── deployment.yaml
-│   │   ├── ingress.yaml
-│   │   ├── narrative-issuer.yaml
-│   │   ├── service.yaml
-│   │   ├── serviceaccount.yaml
-│   │   ├── hpa.yaml
-│   │   ├── splunk-configmap.yaml
-│   │   └── splunk-egress.yaml
-│   └── values.yaml
-├── config/
-│   └── config.local.json     # Seed data for the SQLite books table
-├── docs/                     # Design docs and plans
-├── scripts/
-│   ├── setup.sh              # One-time project rename script
-│   ├── generate-narrative-cert.cjs
-│   └── configure_aws_cli.sh  # AWS CLI setup for Rio pipelines
-├── server/
-│   ├── index.js              # Express entry point
-│   ├── config.js             # Config loader (Whisper → local fallback)
-│   ├── logger.js             # Pino logger
-│   ├── lib/
-│   │   ├── api.js            # Upstream API helper
-│   │   └── whisper.js        # Whisper secret client
-│   ├── middleware/
-│   │   └── shieldAuth.js     # Shield JWT auth middleware
-│   └── routes/
-│       ├── categories.js
-│       └── items.js
-├── src/
-│   ├── main.jsx              # React entry point
-│   ├── App.jsx               # Root component, routing, theme
-│   ├── App.css               # All styles (CSS custom properties)
-│   ├── api.js                # Frontend fetch wrapper
-│   ├── components/
-│   │   ├── Sidebar.jsx
-│   │   ├── TabContent.jsx
-│   │   ├── ResourceTable.jsx
-│   │   ├── DetailPanel.jsx
-│   │   ├── LandingPage.jsx
-│   │   └── AddItemDialog.jsx
-│   └── hooks/
-│       ├── useResource.js
-│       └── useResizable.js
-├── Dockerfile
-├── entrypoint.sh
-├── index.html
-├── package.json
-├── rio.yml                   # Rio CI/CD pipeline (PR build, app build, deploy)
-├── template.config.json
-├── vite.config.js
-├── .env.example
-├── .npmrc
-└── .nvmrc
-```
-
-## Local Development
-
-- **Data**: Books live in SQLite (`server/db.js`) at `DB_PATH` (default `./data/app.db`; a ReadWriteOnce PVC at `/app/data` in K8s). On first start the table is seeded from `config/config.local.json`.
-- **Config loading**: Whisper is loaded best-effort at startup; failures are logged and the app continues.
-- **Auth bypass**: Shield authentication is automatically bypassed when `NODE_ENV` is not `production`, so you do not need OIDC tokens locally.
-- **Dev proxy**: The Vite dev server on port **5173** proxies all `/api/*` requests to the Express backend on port **3001**.
-
-## Narrative Setup
-
-Narrative provides mTLS certificates for authenticating with Whisper and other Apple services. There are two parts: **local development** (generating certs on your machine) and **Kubernetes** (CSI driver auto-provisions certs in pods).
-
-### Prerequisites
-
-1. **Install narrative-client**
-
-   ```bash
-   brew install apple/narrative/narrative-client
-   narrative-client --version
-   ```
-
-2. **Configure AppleConnect**
-
-   Open AppleConnect Settings > Advanced (`Cmd + Shift + Option + E`) and enable:
-   - Create forwardable tickets
-   - Use Narrative Touch ID identity for apple.com domain
-   - Narrative identities via socket
-
-3. **Verify your identity**
-
-   ```bash
-   memento show
-   ```
-
-   Output should include: `aprn:apple:idms:::person:<your_dsid>`
-
-4. **Create an Access Policy**
-
-   - Go to [appleconnect.apple.com](https://appleconnect.apple.com)
-   - Select **Access Policies (Narrative)** under Delegated Access
-   - Choose your system account
-   - Create a policy selecting **Actor Identity** with your personal APRN
-
-### Local Certificate Generation
-
-Set your DSIDs in `.env` (see `.env.example`):
+Requires Node 26 (`nvm use`).
 
 ```bash
-NARRATIVE_PERSON_DSID=your_person_dsid
-NARRATIVE_SYSTEM_DSID=your_system_dsid
+cp .env.example .env
+npm ci
+npm run dev            # vite on :5173 proxying /api to :3001
 ```
 
-Generate certificates:
+Production-style run:
 
 ```bash
-npm run cert:generate
+npm run build
+AUTH_MODE=none NODE_ENV=development npm start
 ```
 
-This runs the identity chain (Platform → Actor → System Actor) and outputs certificates to `cert/system-actor/`. Check expiry with:
+`AUTH_MODE=none` is refused when `NODE_ENV=production`; the process exits
+rather than serving an unauthenticated API.
+
+## Authentication
+
+Set `AUTH_MODE=oidc` (the chart default) and point it at any OIDC issuer:
+
+| Variable | Meaning |
+|---|---|
+| `AUTH_MODE` | `none` or `oidc` |
+| `OIDC_JWKS_URL` | required for `oidc`; the issuer's JWKS endpoint |
+| `OIDC_ISSUER` | optional `iss` check |
+| `OIDC_AUDIENCE` | optional `aud` check |
+| `ALLOWED_GROUPS` | comma-separated `groups` claim values allowed to read; empty = any authenticated user |
+| `FLEET_ADMIN_GROUPS` | groups allowed to add/remove clusters and renew credentials; empty = nobody |
+
+Works with Keycloak, Okta, Entra ID, Auth0, Google, Dex — anything that
+publishes a JWKS and puts group membership in a `groups` claim.
+
+## Container image
+
+Public base images only (`node:26-alpine`), multi-stage, non-root (uid 1000),
+with a `HEALTHCHECK` that uses Node itself so no `curl` is needed.
 
 ```bash
-openssl x509 -in cert/system-actor/cert.pem -noout -dates
+npm run docker:build                       # k8s-fleet-dashboard:latest
+docker run --rm -p 3001:3001 \
+  -e AUTH_MODE=none -e NODE_ENV=development \
+  k8s-fleet-dashboard:latest
 ```
 
-### Kubernetes (CSI Driver)
-
-In production, the Helm chart uses the **Narrative CSI driver** to auto-provision TLS certificates into pods. The CSI driver is pre-installed on the `dev-slm-datahub` EKS cluster — no manual driver installation required.
-
-However, each namespace needs a **NarrativeIssuer** CRD to tell the driver how to provision certificates. This is included in the Helm chart (`chart/templates/narrative-issuer.yaml`) and is applied automatically on `helm upgrade --install`:
-
-```yaml
-apiVersion: ais-sre.apple.com/v1beta1
-kind: NarrativeIssuer
-metadata:
-  name: narrative-issuer
-  namespace: <app-name>
-spec:
-  identities:
-    - ref: platform
-      type: platform
-      domain: aws
-      nameAutodetect: true
-      identityAttestor: awsiid
-```
-
-If you need to apply it manually before the first Helm deploy (e.g. for debugging):
+Push to whichever registry your cluster pulls from:
 
 ```bash
-kubectl apply -f - <<EOF
-apiVersion: ais-sre.apple.com/v1beta1
-kind: NarrativeIssuer
-metadata:
-  name: narrative-issuer
-  namespace: <app-name>
-spec:
-  identities:
-    - ref: platform
-      type: platform
-      domain: aws
-      nameAutodetect: true
-      identityAttestor: awsiid
-EOF
+docker tag k8s-fleet-dashboard:latest ghcr.io/<org>/k8s-fleet-dashboard:1.0.0
+docker push ghcr.io/<org>/k8s-fleet-dashboard:1.0.0
 ```
 
-Once the NarrativeIssuer exists, the deployment mounts a CSI volume at `/tls` with three files:
-
-| File | Purpose |
-|------|---------|
-| `tls.crt` | Client certificate |
-| `tls.key` | Private key |
-| `ca.crt` | CA certificate |
-
-This is configured in `chart/templates/deployment.yaml`:
-
-```yaml
-volumes:
-  - name: tls
-    csi:
-      readOnly: true
-      driver: narrative.apple.com
-      volumeAttributes:
-        narrative.apple.com/type: "actor"
-        narrative.apple.com/domain: "aws"
-        narrative.apple.com/name: "<app-name>"
-        narrative.apple.com/pod-identity: "true"
-        narrative.apple.com/fs-group: "266"
-```
-
-The `narrative.apple.com/name` value is set from `values.yaml` (`narrative.name`) and is replaced by the setup script.
-
-### Troubleshooting
-
-| Error | Fix |
-|-------|-----|
-| `narrative-client not found` | `brew install apple/narrative/narrative-client` |
-| `No Narrative identity found` | Enable Narrative in AppleConnect Settings > Advanced |
-| `Set NARRATIVE_PERSON_DSID...` | Export DSIDs in `.env` or shell |
-| `Failed to process identities` | Verify AppleConnect is running with Narrative enabled |
-| Access Policy errors | Check policy exists at appleconnect.apple.com |
-| Pod `CreateContainerError` with tls volume | Verify `narrative.name` in `values.yaml` matches your registered identity |
-| `driver name narrative.apple.com not found` | NarrativeIssuer CRD missing from namespace — run `kubectl apply` with the manifest above |
-
-### Links
-
-- [Narrative Documentation](https://narrative.apple.com)
-- [Narrative Tooling & Downloads](https://narrative.apple.com/support/tooling.html)
-- [Narrative Troubleshooting](https://narrative.apple.com/support/troubleshooting.html)
-- [Generating Narrative Certificates (AI-for-Devs)](https://pages.github.pie.apple.com/AI-for-Devs-Community/AppleClaudeCode/authentication.html#generating-narrative-certificates)
-- [AppleConnect Access Policies](https://appleconnect.apple.com)
-
-## Deployment
+## Helm
 
 ```bash
-npm run deploy          # Full pipeline: build → ECR push → Helm upgrade
+helm upgrade --install fleet-dashboard ./chart \
+  -n fleet-dashboard --create-namespace \
+  --set image.repository=ghcr.io/<org>/k8s-fleet-dashboard \
+  --set image.tag=1.0.0 \
+  --set auth.mode=oidc \
+  --set auth.jwksUrl=https://login.example.com/.well-known/jwks.json \
+  --set auth.issuer=https://login.example.com/ \
+  --set auth.audience=k8s-fleet-dashboard \
+  --set auth.allowedGroups=platform-engineering
 ```
 
-Or step by step:
+`helm template ./chart` and `helm lint ./chart` both pass offline. Everything
+the chart emits is standard API: `ServiceAccount`, `ClusterRole` +
+`ClusterRoleBinding`, namespaced `Role` + `RoleBinding`, `Service`, `Deployment`,
+`PersistentVolumeClaim`, optional `Ingress`, `HPA`, `NetworkPolicy`, `PDB`.
+
+### Per-cloud notes
+
+| | EKS | AKS | GKE |
+|---|---|---|---|
+| StorageClass | leave empty (gp2/gp3 default) | leave empty (`managed-csi`) | leave empty (`standard-rwo`) |
+| Ingress | `ingressClassName: alb` + [ALB annotations](https://kubernetes-sigs.github.io/aws-load-balancer-controller/) | `ingressClassName: webapprouting.kubernetes.azure.com` | `ingressClassName: gce` |
+| Workload identity | `serviceAccount.annotations["eks.amazonaws.com/role-arn"]` | `azure.workload.identity/client-id` + pod label | `iam.gke.io/gcp-service-account` |
+| Metrics | install metrics-server or the usage panels stay empty | built in | built in |
+
+The chart defaults to **no** node selector, zone pinning, storage class or
+cloud annotation, which is what makes it portable. Provider tuning belongs in a
+`values-<cloud>.yaml` you keep alongside your deployment.
+
+### RBAC
+
+`rbac.readSecrets` is `true` by default because Helm release metadata lives in
+Secrets. Every value that reaches the browser is redacted server-side, but the
+grant itself is cluster-wide read on Secrets. Set it to `false` if your policy
+forbids that — the Helm tab will then report the reads as unavailable while
+every other panel keeps working.
+
+## Verification
 
 ```bash
-npm run build           # Vite production build
-npm run ecr:deploy      # ECR login → Docker build → push → rollout restart
-npm run helm:deploy     # Helm install/upgrade into namespace
+npm test                 # vitest: server collectors + src unit tests
+npx tsc --noEmit         # frontend type check
+npm run build            # vite production bundle
+helm lint ./chart
+helm template ./chart
 ```
 
-To preview the Helm output without deploying:
+## API surface
 
-```bash
-npm run helm:deploy:dry-run
+`GET /api/health` — liveness/readiness, always unauthenticated.
+
+Authenticated under `/api/fleet`:
+
+```
+GET  /clusters                          POST /clusters
+GET  /clusters/:id                      DELETE /clusters/:id
+GET  /clusters/:id/overview             GET  /clusters/:id/summary
+GET  /clusters/:id/workloads            GET  /workloads
+GET  /clusters/:id/pods                 GET  /clusters/:id/logs
+GET  /clusters/:id/events               GET  /clusters/:id/topology
+GET  /clusters/:id/networking           GET  /networking
+GET  /clusters/:id/storage              GET  /storage
+GET  /clusters/:id/security             GET  /security
+GET  /clusters/:id/autoscaling          GET  /autoscaling
+GET  /clusters/:id/certificates         GET  /certificates
+GET  /clusters/:id/mesh                 GET  /mesh
+GET  /clusters/:id/capacity             GET  /capacity
+GET  /clusters/:id/cost                 GET  /cost
+GET  /clusters/:id/reliability          GET  /reliability
+GET  /clusters/:id/observability        GET  /observability
+GET  /clusters/:id/helm/releases        GET  /clusters/:id/helm/releases/:ns/:name/manifest
+GET  /clusters/:id/resource-yaml        GET  /clusters/:id/traffic-errors
+GET  /clusters/:id/traces               GET  /summary
+GET  /tokens                            POST /tokens/:id/renew
+GET  /me                                GET  /compliance
+GET  /drift                             GET  /report
 ```
 
-## Customization
+Every read is fan-out shaped: an unreachable cluster returns a slot with
+`ok: false` and a typed error rather than failing the whole response.
 
-- **Add a tab**: Edit the `TABS`, `KEY_FIELDS`, and `TABLE_CONFIG` objects in `src/components/TabContent.jsx`. Each tab maps to a backend route and defines which columns the table displays.
-- **Add an API route**: Create a new file in `server/routes/`, then register it in `server/index.js` with `app.use()`.
-- **Change the design**: Edit CSS custom properties in `src/App.css`. Light and dark themes are controlled by `[data-theme]` selectors at the top of the file.
-- **Update config shape**: Edit the validation logic in `server/config.js` and add corresponding keys to `config/config.local.json`.
+## Layout
 
-## Template Config Reference
-
-These keys live in `template.config.json` and are replaced project-wide by the setup script.
-
-| Key | Default Value | Description |
-|-----|---------------|-------------|
-| `appName` | `platform-btp-kyma-fleet-dashboard` | npm package name and general identifier |
-| `appTitle` | `Btp Kyma Fleet Dashboard` | Display title shown in the browser tab and header |
-| `namespace` | `btp-kyma-fleet-dashboard` | Kubernetes namespace for Helm deployments |
-| `ecrRepo` | `637248970961.dkr.ecr.us-west-2.amazonaws.com/btp-kyma-fleet-dashboard` | Full ECR repository URI for Docker images |
-| `ecrRegion` | `us-west-2` | AWS region for ECR authentication |
-| `basePath` | `/btp-kyma-fleet-dashboard/` | URL base path (used by Vite and the ingress) |
-| `port` | `3001` | Express server listen port |
-| `narrativeDomain` | `aws` | Narrative identity domain |
-| `narrativeName` | `btp-kyma-fleet-dashboard` | Narrative identity name |
-| `narrativeType` | `actor` | Narrative identity type (platform/host/actor) |
-| `whisperSecretName` | `btp-kyma-fleet-dashboard-prod` | Whisper secret name for production |
-| `whisperNamespace` | `btp-pltform-security` | Whisper namespace for secret lookup |
-| `whisperSecretNameDev` | `btp-kyma-fleet-dashboard-non-prods` | Whisper secret name for non-production environments |
-| `splunkIndex` | `btp_platform_apps` | Splunk index for log forwarding |
-| `splunkSourcetype` | `btp_kyma_fleet_dashboard` | Splunk sourcetype for log classification |
-| `shieldVip` | `sura.btp.apple.com` | Shield OIDC provider hostname for JWT validation |
-| `authAllowedGroups` | `12421088` | Comma-separated Shield group IDs allowed access |
-| `rioProject` | `ist-btp-platform-btp-kyma-fleet-dashboard` | Rio project name (used in badges and pipeline URLs) |
-| `slackChannel` | `team-platform-foundation-dev` | Slack channel for Rio build notifications |
+```
+server/            Express API
+  fleet/           cluster client, collectors, registry, auth
+  routes/          /api/status
+src/               React frontend (Vite, Tailwind, react-router)
+chart/             Helm chart
+config/            seed data for the local SQLite database
+```

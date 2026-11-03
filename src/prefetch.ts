@@ -58,8 +58,7 @@ export const TAB_READS: Record<Tab, (id: string) => string[]> = {
   storage: id => [`/clusters/${id}/storage`],
   logs: id => [`/clusters/${id}/pods`],
   traffic: () => [],
-  security: id => [`/clusters/${id}/security`, `/clusters/${id}/policy`, `/clusters/${id}/opa`],
-  platform: id => [`/clusters/${id}/modules`, `/clusters/${id}/btp-services`, `/clusters/${id}/observability`],
+  security: id => [`/clusters/${id}/security`],
   // Retired tab ids remain only so an in-flight legacy selection type-checks; Network Operations
   // owns their reads, so following an old bookmark never starts a duplicate sweep.
   traces: () => [],
@@ -88,7 +87,6 @@ export const SWEEP_ORDER: Tab[] = [
   'overview',
   'nodes',
   'helm',
-  'platform',
   'storage',
   // Second to last: it reads nodes and pods, which every other sweep entry has already put in
   // the server's cache by the time this runs, so it costs the rate-card arithmetic and nothing else.

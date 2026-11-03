@@ -19,12 +19,13 @@
  * three tables rendered empty.
  */
 import type {
-  ApiRuleRow,
   CertificateRow,
   ContainerRow,
   CronJobRow,
+  GatewayRow,
   HelmRelease,
   HpaRow,
+  HttpRouteRow,
   IngressRow,
   NamespaceRow,
   NodeRow,
@@ -300,33 +301,47 @@ function renderService(raw: unknown, _ref: ResourceRef): ResourceView {
   };
 }
 
-function renderApiRule(raw: unknown, _ref: ResourceRef): ResourceView {
-  const a = raw as ApiRuleRow;
+function renderGateway(raw: unknown, _ref: ResourceRef): ResourceView {
+  const g = raw as GatewayRow;
   return {
-    status: a.state,
-    tone: a.needsMigration ? 'bad' : toneForPhase(a.state),
-    identity: [f('Kind', 'APIRule'), f('Namespace', a.namespace, true), f('Host', a.host, true)],
+    status: g.programmed === true ? 'Programmed' : g.programmed === false ? 'Not programmed' : null,
+    tone: g.programmed === true ? 'ok' : g.programmed === false ? 'bad' : 'unknown',
+    identity: [f('Kind', 'Gateway'), f('Namespace', g.namespace, true), f('Class', or(g.gatewayClassName), true)],
     fields: [
-      f('Gateway', or(a.gateway), true),
-      f('Backend', `${a.serviceName}:${a.servicePort}`, true),
-      f('Served version', or(a.servedVersion), true),
-      f('Created as', or(a.originalVersion), true),
-      // The finding this row exists to carry: v1beta1 stopped being reconciled in Kyma 3.10, so
-      // the rule on screen may not be the rule in force.
       f(
-        'Migration',
-        a.needsMigration ? 'Needs migration — v1beta1 is no longer reconciled' : 'Up to date'
-      ),
-      f('Spec source', or(a.specSource)),
-      f(
-        'Paths',
-        a.paths?.length ? a.paths.map(p => `${p.path} [${p.methods.join(',')}]`).join('  ') : '—',
+        'Listeners',
+        g.listeners?.length
+          ? g.listeners
+              .map(l => `${l.name ? `${l.name} ` : ''}${l.hostname || '*'}:${l.port ?? '—'}/${l.protocol ?? '—'}${l.tls ? ' TLS' : ''}`)
+              .join(', ')
+          : '—',
         true
       )
     ],
-    related: [
-      { relation: 'Backend', ref: { kind: 'Service', namespace: a.namespace, name: a.serviceName } }
-    ]
+    related: []
+  };
+}
+
+function renderHttpRoute(raw: unknown, _ref: ResourceRef): ResourceView {
+  const h = raw as HttpRouteRow;
+  const related: RelatedRef[] = [];
+  for (const parent of h.parents ?? []) {
+    const [namespace, name] = parent.split('/');
+    if (namespace && name) related.push({ relation: 'Gateway', ref: { kind: 'Gateway', namespace, name } });
+  }
+  for (const b of h.backends ?? []) {
+    related.push({
+      relation: 'Backend',
+      ref: { kind: 'Service', namespace: b.namespace, name: b.name },
+      note: b.port ? `port ${b.port}` : undefined
+    });
+  }
+  return {
+    status: h.accepted === true ? 'Accepted' : h.accepted === false ? 'Not accepted' : null,
+    tone: h.accepted === true ? 'ok' : h.accepted === false ? 'bad' : 'unknown',
+    identity: [f('Kind', 'HTTPRoute'), f('Namespace', h.namespace, true)],
+    fields: [f('Hostnames', h.hostnames?.join(', ') || 'any', true)],
+    related
   };
 }
 
@@ -636,12 +651,19 @@ export const RESOURCE_REGISTRY: Record<ResourceKind, ResourceDefinition> = {
     home: { tab: 'networking', section: 'networking' },
     render: renderIngress
   },
-  APIRule: {
-    kind: 'APIRule',
-    plural: 'APIRules',
+  Gateway: {
+    kind: 'Gateway',
+    plural: 'Gateways',
     source: 'networking',
     home: { tab: 'networking', section: 'networking' },
-    render: renderApiRule
+    render: renderGateway
+  },
+  HTTPRoute: {
+    kind: 'HTTPRoute',
+    plural: 'HTTPRoutes',
+    source: 'networking',
+    home: { tab: 'networking', section: 'networking' },
+    render: renderHttpRoute
   },
   VirtualService: {
     kind: 'VirtualService',

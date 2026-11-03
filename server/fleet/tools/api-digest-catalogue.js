@@ -813,10 +813,10 @@ const ROUTES = [
     }),
     effect:
       'Writes the fleet registry: the cluster record and its token go to the in-process stores (`memClusters` and ' +
-      '`memTokens` in redis-store.js) and, where a service account is mounted, to the hub Secrets kyma-fleet-clusters ' +
-      'and kyma-fleet-tokens. A kubeconfig-only onboarding also creates, once, on the target cluster: the kyma-fleet ' +
-      'Namespace, the fleet-reader ServiceAccount, the kyma-fleet-reader ClusterRole (`readOnlyRules` in onboard.js) ' +
-      'and its binding, the kyma-fleet-token-issuer Role and RoleBinding, and a first 24 h token; a token onboarding ' +
+      '`memTokens` in redis-store.js) and, where a service account is mounted, to the hub Secrets fleet-dashboard-clusters ' +
+      'and fleet-dashboard-tokens. A kubeconfig-only onboarding also creates, once, on the target cluster: the fleet-dashboard ' +
+      'Namespace, the fleet-reader ServiceAccount, the fleet-dashboard-reader ClusterRole (`readOnlyRules` in onboard.js) ' +
+      'and its binding, the fleet-dashboard-token-issuer Role and RoleBinding, and a first 24 h token; a token onboarding ' +
       'mints its successor with a TokenRequest. Both guards in router.test.js allow it as the bootstrap of ' +
       'read access: admin-gated, and touching no workload.'
   },
@@ -878,8 +878,8 @@ const ROUTES = [
       renewable: 'always true'
     })}
 // Or 302 Found, to a client that ranks text/html above JSON, as a browser does: Location is the console's
-// SSO onboarding page, /kyma-fleet-dashboard/#/onboard/advanced?sso=connected&cluster=<id>, where
-// FLEET_UI_BASE_PATH, when set, replaces /kyma-fleet-dashboard`,
+// SSO onboarding page, /k8s-fleet-dashboard/#/onboard/advanced?sso=connected&cluster=<id>, where
+// FLEET_UI_BASE_PATH, when set, replaces /k8s-fleet-dashboard`,
     console: 'Reached by the identity provider\'s redirect after sign-in, not by a console call'
   },
   {
@@ -957,7 +957,7 @@ const ROUTES = [
 }`,
     effect:
       'Creates a TokenRequest on the target cluster, authenticated by the current token, and writes the new token to ' +
-      'the token store and, where a service account is mounted, the hub Secret kyma-fleet-tokens. Minting is how the ' +
+      'the token store and, where a service account is mounted, the hub Secret fleet-dashboard-tokens. Minting is how the ' +
       'console gets the short-lived credential it reads with, so the route and mint.js are allowed by both guards in ' +
       'router.test.js.'
   },

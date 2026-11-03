@@ -1,6 +1,13 @@
 apiVersion: v2
-name: btp-kyma-fleet-dashboard
-description: A Helm chart for the BTP Btp Kyma Fleet Dashboard web application
+name: k8s-fleet-dashboard
+description: Read-only web dashboard for a fleet of Kubernetes clusters (EKS, AKS, GKE, kind, OpenShift)
 type: application
-version: 0.1.0
+version: 1.0.0
 appVersion: "1.0.0"
+keywords:
+  - kubernetes
+  - dashboard
+  - observability
+  - fleet
+maintainers:
+  - name: srinivas

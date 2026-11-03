@@ -1,29 +1,25 @@
+import { readFileSync } from 'node:fs';
 import { Router } from 'express';
-import { readCertStatus } from '../lib/certStatus.js';
+import { authMode } from '../middleware/oidcAuth.js';
 
-// Narrative identity status. Paths come from the same env vars the Whisper
-// client uses, which the chart points at the CSI mount (/tls).
-export default function statusRoutes({ env = process.env, whisper = null } = {}) {
+let PACKAGE_VERSION = '0.0.0';
+try {
+  PACKAGE_VERSION = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version || PACKAGE_VERSION;
+} catch { /* running from a trimmed image; an unknown version beats a crashing route */ }
+
+// Deployment status: what is running, how many clusters it knows, and how it authenticates.
+// Deliberately carries nothing from the app config file — that may hold values nobody should
+// read off an unauthenticated-looking status page.
+export default function statusRoutes({ env = process.env, registry = null, version = PACKAGE_VERSION } = {}) {
   const router = Router();
 
-  router.get('/', async (req, res) => {
-    let narrative;
-    try {
-      narrative = await readCertStatus({
-        certPath: env.WHISPER_CLIENT_CERT_PATH,
-        keyPath: env.WHISPER_CLIENT_KEY_PATH,
-        caPath: env.WHISPER_CLIENT_CA_PATH,
-      });
-    } catch (err) {
-      narrative = { status: 'fail', detail: err.message, leaf: null, chain: [], ca: [], keyMatches: null };
-    }
-
+  router.get('/', (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json({
-      checkedAt: new Date().toISOString(),
-      narrative,
-      whisper: { loaded: whisper != null },
-      runtime: { namespace: env.POD_NAMESPACE || null, pod: env.HOSTNAME || null, nodeEnv: env.NODE_ENV || 'development' },
+      ok: true,
+      version,
+      clusters: registry ? registry.all().length : null,
+      authMode: authMode(env),
     });
   });
 

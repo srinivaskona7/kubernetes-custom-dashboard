@@ -117,7 +117,7 @@ function RailDivider() {
  * The sidebar's width, remembered across reloads.
  *
  * A dense table (68 workloads × 9 columns, 155 secrets) is the reason this exists: 250px of
- * permanent navigation is the difference between reading a pod name and reading `btp-kyma-…`.
+ * permanent navigation is the difference between reading a pod name and reading `fleet-app-…`.
  * It used to be a boolean — 250px or 52px — and the two numbers were someone else's guess about
  * every operator's screen. A continuous width lets a 1280px laptop trade 90px of nav for a column
  * of the Nodes table without giving up labels entirely, which is the trade the boolean could not
@@ -452,10 +452,10 @@ export function Rail({
                 K
               </span>
               {/* `truncate` and `min-w-0` because the header is the one row in the sidebar with two
-                  competing children: at 182px the wordmark wrapped to "Kyma / Fleet" and pushed the
+                  competing children: at 182px the wordmark wrapped to "Kubernetes / Fleet" and pushed the
                   collapse control below the 60px header, off the visible strip. The product name
                   ellipsising is the cheaper loss. */}
-              <span className="truncate font-display text-[16px] font-semibold text-text">Kyma Fleet</span>
+              <span className="truncate font-display text-[16px] font-semibold text-text">Kubernetes Fleet Dashboard</span>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               {/* The build number is the first thing worth dropping when the header runs out of

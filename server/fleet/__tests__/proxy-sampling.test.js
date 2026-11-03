@@ -22,15 +22,17 @@ test('ownerOf strips the ReplicaSet hash to the Deployment', () => {
   assert.deepEqual(ownerOf(pod('shop', 'bare')), { kind: 'Pod', name: 'bare' });
 });
 
-test('route backends: VirtualService destinations and APIRule v2 services', () => {
+test('route backends: VirtualService destinations, Ingress services and HTTPRoute backendRefs', () => {
   const routes = buildRouteIndex({
-    virtualservices: ok([{ metadata: { namespace: 'shop', name: 'vs' }, spec: { hosts: ['shop.c.example.com'], http: [{ route: [{ destination: { host: 'approuter' } }, { destination: { host: 'srv.shop.svc.cluster.local' } }] }] } }]),
-    apirules: ok([{ metadata: { namespace: 'shop', name: 'ar' }, spec: { hosts: ['api'], service: { name: 'api' }, rules: [{ service: { name: 'other', namespace: 'b' } }] } }])
+    virtualservices: ok([{ metadata: { namespace: 'shop', name: 'vs' }, spec: { hosts: ['shop.c.example.com'], http: [{ route: [{ destination: { host: 'frontend' } }, { destination: { host: 'srv.shop.svc.cluster.local' } }] }] } }]),
+    ingresses: ok([{ metadata: { namespace: 'shop', name: 'ing' }, spec: { rules: [{ host: 'api.c.example.com', http: { paths: [{ path: '/', backend: { service: { name: 'api', port: { number: 80 } } } }] } }] } }]),
+    httproutes: ok([{ metadata: { namespace: 'shop', name: 'hr' }, spec: { hostnames: ['other.c.example.com'], rules: [{ backendRefs: [{ name: 'other', namespace: 'b', port: 80 }] }] } }])
   });
-  assert.deepEqual(routes.find(r => r.kind === 'VirtualService').backends, [{ name: 'approuter', namespace: 'shop' }, { name: 'srv', namespace: 'shop' }]);
-  assert.deepEqual(routes.find(r => r.kind === 'APIRule').backends, [{ name: 'api', namespace: 'shop' }, { name: 'other', namespace: 'b' }]);
-  const services = ok([{ metadata: { namespace: 'shop', name: 'approuter' }, spec: { selector: { app: 'approuter' } } }, { metadata: { namespace: 'shop', name: 'srv' }, spec: {} }]);
-  assert.deepEqual(routeBackendSelectors(routes, services), [{ namespace: 'shop', selector: { app: 'approuter' } }], 'a selectorless Service backs no pod');
+  assert.deepEqual(routes.find(r => r.kind === 'VirtualService').backends, [{ name: 'frontend', namespace: 'shop' }, { name: 'srv', namespace: 'shop' }]);
+  assert.deepEqual(routes.find(r => r.kind === 'Ingress').backends, [{ name: 'api', namespace: 'shop' }]);
+  assert.deepEqual(routes.find(r => r.kind === 'HTTPRoute').backends, [{ name: 'other', namespace: 'b' }]);
+  const services = ok([{ metadata: { namespace: 'shop', name: 'frontend' }, spec: { selector: { app: 'frontend' } } }, { metadata: { namespace: 'shop', name: 'srv' }, spec: {} }]);
+  assert.deepEqual(routeBackendSelectors(routes, services), [{ namespace: 'shop', selector: { app: 'frontend' } }], 'a selectorless Service backs no pod');
   assert.deepEqual(routeBackendSelectors(routes, { unavailable: true }), []);
 });
 

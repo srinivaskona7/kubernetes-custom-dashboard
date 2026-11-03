@@ -13,7 +13,7 @@ function livePath(): IngressNetworkPath {
       provider: 'aws',
       region: 'us-east-1',
       zones: ['us-east-1a', 'us-east-1b', 'us-east-1d'],
-      domain: 'c-9d0a141.kyma.ondemand.com',
+      domain: 'c-9d0a141.apps.example.com',
       shootName: 'c-9d0a141',
       nodeCidr: '10.250.0.0/16',
       podCidr: '100.96.0.0/11',
@@ -22,7 +22,7 @@ function livePath(): IngressNetworkPath {
       reason: null
     },
     ingress: {
-      dns: [{ name: 'kyma-system/kyma-gateway', dnsName: '*.c-9d0a141.kyma.ondemand.com', targets: ['a959.elb.amazonaws.com'], ready: true }],
+      dns: [{ name: 'platform-system/main-gateway', dnsName: '*.c-9d0a141.apps.example.com', targets: ['a959.elb.amazonaws.com'], ready: true }],
       loadBalancers: [
         {
           service: 'istio-system/istio-ingressgateway',
@@ -46,7 +46,7 @@ function livePath(): IngressNetworkPath {
       gatewayPods: { total: 3, ready: 3, nodes: 3, zones: ['us-east-1a', 'us-east-1b', 'us-east-1d'] },
       nodes: { total: 3, zones: ['us-east-1a', 'us-east-1b', 'us-east-1d'] },
       proxyProtocolFilter: true,
-      policies: [{ namespace: 'istio-system', name: 'apple-acl', action: 'ALLOW' }],
+      policies: [{ namespace: 'istio-system', name: 'edge-acl', action: 'ALLOW' }],
       servers: 6,
       tlsServers: 5,
       routes: 13
@@ -58,11 +58,11 @@ function livePath(): IngressNetworkPath {
       serviceEntries: 0,
       outboundPolicy: 'ALLOW_ANY',
       destinations: [
-        { display: 'External API', label: 'External API', source: 'networkpolicy-prose', ips: ['23.20.180.97'], objects: ['NetworkPolicy gatekeeper-system/egress-allow-gatekeeper'] },
+        { display: 'External API', label: 'External API', source: 'networkpolicy-prose', ips: ['23.20.180.97'], objects: ['NetworkPolicy policy-system/egress-allow-policy'] },
         { display: 'xsuaa', label: 'xsuaa', source: 'networkpolicy', ips: ['3.214.110.153'], objects: ['NetworkPolicy a/one', 'NetworkPolicy b/two'] },
         { display: 'CLS ingest', label: 'CLS ingest', source: 'telemetry', ips: ['54.86.56.192'], objects: ['LogPipeline x'] }
       ],
-      observed: [{ ip: '54.86.56.192', display: 'SAP Cloud Logging', source: 'telemetry', requests: 307, callers: ['kyma-system/otlp-a'], callersTotal: 1 }]
+      observed: [{ ip: '54.86.56.192', display: 'Cloud Logging', source: 'telemetry', requests: 307, callers: ['platform-system/otlp-a'], callersTotal: 1 }]
     },
     envoyFilters: { istioVersion: '1.30.4' }
   };
@@ -277,7 +277,7 @@ describe('helpers', () => {
   });
 
   test('observedLabel prefers the name, falls back to the destination address', () => {
-    expect(observedLabel({ ip: '1.2.3.4', display: 'SAP Cloud Logging' })).toBe('SAP Cloud Logging');
+    expect(observedLabel({ ip: '1.2.3.4', display: 'Cloud Logging' })).toBe('Cloud Logging');
     expect(observedLabel({ ip: '1.2.3.4', display: null })).toBe('1.2.3.4');
   });
 

@@ -127,23 +127,13 @@ test('autoscaling stats: HPAs split by state, CronJobs in the headline', () => {
   ]);
 });
 
-test('networking: APIRules split by version, with v1beta1 as the deviation', () => {
+test('networking: Ingresses, Gateway API and Istio objects side by side, no APIRules', () => {
   const s = statsOf('networking', [ok('c1', { summary: {
-    apirulesCount: 5, virtualServicesCount: 9, servicesCount: 91, ingressesCount: 0,
-    apirulesByVersion: { v2: 3, v2alpha1: 1, v1beta1: 1, unknown: 0 }, apirulesUnavailable: null
+    ingressesCount: 4, httproutesCount: 3, gatewaysCount: 1, virtualServicesCount: 9, servicesCount: 91
   } })]);
-  assert.deepStrictEqual(s.headline.map(h => [h.label, h.count]), [['APIRules', 5], ['VirtualServices', 9], ['Services', 91], ['Ingresses', 0]]);
-  assert.equal(s.split.total, 5);
-  assert.equal(part(s, 'v1beta1').tone, 'warn');
-  assert.equal(part(s, 'v2').count, 3);
-});
-
-test('networking: an unread APIRule list leaves the APIRule count and bar unavailable', () => {
-  const s = statsOf('networking', [ok('c1', { summary: {
-    apirulesCount: 0, virtualServicesCount: 9, servicesCount: 91, ingressesCount: 0,
-    apirulesByVersion: { v2: 0, v2alpha1: 0, v1beta1: 0, unknown: 0 }, apirulesUnavailable: 'FORBIDDEN'
-  } })]);
-  assert.equal(head(s, 'APIRules').count, null);
+  assert.deepStrictEqual(s.headline.map(h => [h.label, h.count]), [
+    ['Ingresses', 4], ['HTTPRoutes', 3], ['Gateway', 1], ['VirtualServices', 9], ['Services', 91]
+  ]);
   assert.equal(s.split, null);
 });
 
@@ -158,13 +148,6 @@ test('certificates: each certificate counted once, worst state first', () => {
   assert.deepStrictEqual(s.split.parts.map(p => [p.key, p.count]), [['valid', 1], ['expiring', 1], ['unready', 1], ['expired', 1]]);
   assert.equal(s.split.parts.reduce((n, p) => n + p.count, 0), s.split.total);
   assert.deepStrictEqual(s.headline.map(h => [h.label, h.count]), [['certificates', 4], ['expiring soon', 2], ['expired', 1]]);
-});
-
-test('modules: module states, Kyma CRs in the headline', () => {
-  const kymas = [{ state: 'Ready', modules: [{ state: 'Ready' }, { state: 'Ready' }, { state: 'Processing' }, { state: 'Error' }] }];
-  const s = statsOf('modules', [ok('c1', { kymas, summary: { kymaCount: 1, moduleCount: 4, kymaManaged: true } })]);
-  assert.deepStrictEqual(s.headline.map(h => [h.label, h.count]), [['modules', 4], ['Kyma CR', 1]]);
-  assert.deepStrictEqual(s.split.parts.map(p => [p.key, p.count]), [['ready', 2], ['unsettled', 1], ['error', 1]]);
 });
 
 test('singular labels agree with a count of one', () => {
@@ -250,20 +233,14 @@ test('autoscaling: a refused HPA list is unavailable, not 0 HPAs', () => {
 
 test('networking: each refused list blanks its own count only', () => {
   const s = statsOf('networking', [ok('c1', { summary: {
-    apirulesCount: 2, virtualServicesCount: 0, servicesCount: 0, ingressesCount: 1,
-    apirulesByVersion: { v2: 2 }, apirulesUnavailable: null, unavailable: ['virtualservices', 'services']
+    ingressesCount: 1, httproutesCount: 2, gatewaysCount: 0, virtualServicesCount: 0, servicesCount: 0,
+    unavailable: ['httproutes', 'virtualservices', 'services']
   } })]);
-  assert.deepStrictEqual(s.headline.map(h => h.count), [2, null, null, 1]);
+  assert.deepStrictEqual(s.headline.map(h => h.count), [1, null, 0, null, null]);
 });
 
 test('certificates: a refused certificate list is unavailable, not 0 certificates', () => {
   const s = statsOf('certificates', [ok('c1', { certificates: [], summary: { totalCertificates: 0, expiringSoon: 0, expired: 0, unavailable: ['certificates'] } })]);
   assert.deepStrictEqual(s.headline.map(h => h.count), [null, null, null]);
   assert.equal(s.split, null);
-});
-
-test('modules: no stats unless the cluster is confirmed Kyma-managed', () => {
-  for (const kymaManaged of [false, null]) {
-    assert.equal(statsOf('modules', [ok('c1', { kymas: [], summary: { kymaCount: 0, moduleCount: 0, kymaManaged } })]), null, `kymaManaged ${kymaManaged}`);
-  }
 });

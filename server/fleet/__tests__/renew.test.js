@@ -9,7 +9,7 @@ const { ClusterError, UNAUTHENTICATED } = _errors2;
 const T0 = Date.parse('2026-08-31T12:00:00Z');
 const inHours = h => new Date(T0 + h * 3600_000).toISOString();
 const cluster = {
-  id: 'platformsbx', namespace: 'kyma-fleet',
+  id: 'platformsbx', namespace: 'fleet-dashboard',
   serviceAccount: 'fleet-reader', apiUrl: 'https://api.example'
 };
 
@@ -84,7 +84,7 @@ test('an unseeded cluster reports the exact command that fixes it', async () => 
   const out = await renewOne({ cluster, now: T0, record: null });
   assert.strictEqual(out.healthy, false);
   assert.strictEqual(out.patch, null);
-  assert.match(out.summary, /kubectl create token fleet-reader -n kyma-fleet --duration=24h/);
+  assert.match(out.summary, /kubectl create token fleet-reader -n fleet-dashboard --duration=24h/);
 });
 
 test('a cluster granting less than the renewal interval is flagged loudly', async () => {

@@ -15,22 +15,23 @@ async function getStatus(options) {
 }
 
 describe('GET /api/status', () => {
-  it('reports a missing certificate and runtime info without throwing', async () => {
-    const { res, body } = await getStatus({
-      env: { WHISPER_CLIENT_CERT_PATH: '/nonexistent/tls.crt', POD_NAMESPACE: 'ns', HOSTNAME: 'pod-1', NODE_ENV: 'production' },
-      whisper: null,
-    });
+  it('reports exactly ok, version, clusters and authMode', async () => {
+    const registry = { all: () => [{ id: 'a' }, { id: 'b' }] };
+    const { res, body } = await getStatus({ env: { NODE_ENV: 'production', AUTH_MODE: 'oidc' }, registry, version: '1.2.3' });
     expect(res.status).toBe(200);
     expect(res.headers.get('cache-control')).toBe('no-store');
-    expect(body.narrative.status).toBe('missing');
-    expect(body.whisper).toEqual({ loaded: false });
-    expect(body.runtime).toEqual({ namespace: 'ns', pod: 'pod-1', nodeEnv: 'production' });
-    expect(Date.parse(body.checkedAt)).not.toBeNaN();
+    expect(body).toEqual({ ok: true, version: '1.2.3', clusters: 2, authMode: 'oidc' });
   });
 
-  it('reflects a loaded Whisper config', async () => {
-    const { body } = await getStatus({ env: {}, whisper: { some: 'secret' } });
-    expect(body.whisper).toEqual({ loaded: true });
+  it('reports authMode none outside production by default, and null clusters with no registry', async () => {
+    const { body } = await getStatus({ env: {} });
+    expect(body.authMode).toBe('none');
+    expect(body.clusters).toBeNull();
+    expect(typeof body.version).toBe('string');
+  });
+
+  it('never carries app config contents', async () => {
+    const { body } = await getStatus({ env: {}, appConfig: { apiKey: 'secret' } });
     expect(JSON.stringify(body)).not.toContain('secret');
   });
 });

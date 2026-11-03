@@ -55,8 +55,8 @@ const registry = new Registry({ file: clustersFile, dir: clustersDir });
 // Registry merges `memClusters` the same way. So an onboarded cluster and its pasted token
 // are honoured end to end, and nothing is persisted to disk.
 const tokens = new TokenStore();
-const tokenWriter = new SecretTokenWriter({ secretName: 'kyma-fleet-tokens' });
-const clusterWriter = new SecretTokenWriter({ secretName: 'kyma-fleet-clusters' });
+const tokenWriter = new SecretTokenWriter({ secretName: 'fleet-dashboard-tokens' });
+const clusterWriter = new SecretTokenWriter({ secretName: 'fleet-dashboard-clusters' });
 
 const renewer = new Renewer({
   registry,

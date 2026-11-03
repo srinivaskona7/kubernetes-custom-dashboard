@@ -87,7 +87,7 @@ export function qualifierCaption(
     case 'approximate-floor':
       return `${noRate}, and ${fromShape} — so this is neither exact nor a bound`;
     default:
-      return 'per month, at list rate plus the Kyma management fee';
+      return 'per month, at list rate';
   }
 }
 

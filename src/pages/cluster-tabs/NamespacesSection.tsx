@@ -153,7 +153,7 @@ export function NamespacesSection({
       key: 'ns',
       header: 'Namespace',
       pin: true,
-      // Fits the longest name on platformsbx (`btp-platform-foundation`, 23 characters of 13px mono)
+      // Fits the longest name on platformsbx (`platform-foundation-ops`, 23 characters of 13px mono)
       // plus the card's 12px start inset and the cell's 16px end padding; a longer one truncates and
       // keeps its title. Fixed rather than capped, so no name moves the columns beside it.
       width: '212px',
@@ -368,7 +368,7 @@ export function NamespacesSection({
           label="Show system namespaces"
           checked={showsSystem(filter)}
           onChange={v => setFilter(f => withShowSystem(f, v))}
-          title="Adds the namespaces the server classifies as system (Kubernetes, Istio, Kyma and the bootstrap tooling). Off by default, so the table opens on application namespaces."
+          title="Adds the namespaces the server classifies as system (Kubernetes, Istio, platform operators and the bootstrap tooling). Off by default, so the table opens on application namespaces."
         />
       </FilterBar>
 

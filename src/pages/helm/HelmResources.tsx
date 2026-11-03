@@ -55,7 +55,7 @@ export function filterResources(rows: HelmRelatedResource[], f: ResourceFilters)
   });
 }
 
-/** A `<select>` in the console's filter idiom. Local because the shared one lives under `opa/`. */
+/** A `<select>` in the console's filter idiom. */
 function Filter({
   label,
   value,
@@ -178,7 +178,7 @@ export function HelmResources({
       key: 'namespace',
       header: 'Namespace',
       priority: 2,
-      /** Rendered 214px against a declared `width: '160px'` — long Kyma namespaces, uncapped. */
+      /** Rendered 214px against a declared `width: '160px'` — long namespaces, uncapped. */
       max: '160px',
       render: r => (
         <span className="mono text-muted" title={r.namespace ?? 'This Kind is cluster-scoped — it has no namespace.'}>

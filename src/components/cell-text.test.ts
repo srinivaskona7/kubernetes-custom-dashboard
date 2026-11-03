@@ -13,13 +13,13 @@ import { abbreviate, filterClusters, nextIndexForKey, showFilter, FILTER_APPEARS
 
 describe('textOf', () => {
   it('reads a plain string or number', () => {
-    expect(textOf('kyma-system')).toBe('kyma-system');
+    expect(textOf('platform-system')).toBe('platform-system');
     expect(textOf(42)).toBe('42');
   });
 
   it('reads through the element tree a cell actually renders', () => {
-    const cell = h('span', { className: 'mono' }, 'gatekeeper-system');
-    expect(textOf(cell)).toBe('gatekeeper-system');
+    const cell = h('span', { className: 'mono' }, 'policy-system');
+    expect(textOf(cell)).toBe('policy-system');
   });
 
   it('joins siblings the way a reader sees them, with no leading space from an icon', () => {

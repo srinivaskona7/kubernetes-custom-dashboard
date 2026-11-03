@@ -19,7 +19,7 @@ const FAKE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '
  *  1. **Registered and dispatched.** A `?section=` id present in `TAB_SECTIONS` but missing from
  *     the dispatch renders the tab's last branch, so an operator clicking Taints reads Headroom &
  *     Scheduling under the wrong heading. They are sub-tabs, so they add no rail entry and `TABS`
- *     stays at 15.
+ *     stays at 14.
  *  2. **No Kubernetes sentence is written in the .tsx.** Every explanation of an effect, a
  *     wildcard or an inert toleration comes from `taint-labels.ts`, which is unit-tested. A
  *     sentence restated in the component is a second version with no test behind it.
@@ -48,7 +48,7 @@ function nodeSections() {
   return TABS_TS.slice(at, end);
 }
 
-test('taints and tolerations are registered as node sub-tabs, and TABS stays at 15', () => {
+test('taints and tolerations are registered as node sub-tabs, and TABS stays at 14', () => {
   const list = nodeSections();
   const ids = [...list.matchAll(/id: '([a-z]+)'/g)].map(m => m[1]);
   assert.deepEqual(
@@ -64,12 +64,12 @@ test('taints and tolerations are registered as node sub-tabs, and TABS stays at 
   assert.ok(tabs, 'the TABS array is gone from tabs.ts');
   assert.equal(
     [...tabs[1].matchAll(/id: '[a-z-]+'/g)].length,
-    15,
-    'TABS is no longer 15 entries. Taints and Tolerations are sub-tabs of Nodes & Topology by ' +
+    14,
+    'TABS is no longer 14 entries. Taints and Tolerations are sub-tabs of Nodes & Topology by ' +
       'decision, so a new rail entry is the change this asserts against. It was 13 until the ' +
       'network split: Ingress & Traffic and Distributed Traces became views inside Network ' +
       'Operations (-2), and Networking, Istio & Mesh, Observability and Certificates each took ' +
-      'their own entry (+4).'
+      'their own entry (+4), and the Modules & Telemetry tab was retired into Observability (-1).'
   );
 });
 

@@ -27,13 +27,13 @@ export const DEFAULT_WIDTH = 240;
  */
 export const SNAP_TO_RAIL = 112;
 
-export const SIDEBAR_WIDTH_KEY = 'kyma-fleet.sidebar.width';
+export const SIDEBAR_WIDTH_KEY = 'k8s-fleet.sidebar.width';
 /**
  * The last width the sidebar had while still showing labels. A second key rather than a derived
  * value: once the operator collapses to the rail, the live width is 60 and the 320px they chose
  * is gone.
  */
-export const SIDEBAR_EXPANDED_KEY = 'kyma-fleet.sidebar.expandedWidth';
+export const SIDEBAR_EXPANDED_KEY = 'k8s-fleet.sidebar.expandedWidth';
 
 /** The slice of the Storage API this module uses. Injected so tests need no DOM. */
 export interface WidthStore {

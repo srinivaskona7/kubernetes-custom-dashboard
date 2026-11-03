@@ -12,7 +12,7 @@
  *     the backend never gave.
  *  2. The `explanation` sentence, which an older backend does not send. Absent means the sentence is
  *     omitted, NOT synthesised here: the comparison rows already carry the two references, and a
- *     second author for the drift narrative is how two versions of it drift apart.
+ *     second author for the drift explanation is how two versions of it drift apart.
  *  3. The part of an image reference an operator reads — its tag, or the digest. Used only to label
  *     the comparison, never to decide drift: that comparison is `normalizeImage`'s job on the
  *     server, and two different references can perfectly well share a tag.
@@ -69,7 +69,7 @@ export const UNKNOWN_EXPLANATION =
  * `'owner-chain'` is the only trustworthy answer — pod → controlling ReplicaSet → its owning
  * Deployment, both hops real API relations. `'unavailable'` means the ReplicaSet read failed or
  * stopped at the paging ceiling, and the collector deliberately did NOT fall back to selector
- * matching (overlapping labels in `kyma-system` reported a dozen false drifts when it did).
+ * matching (overlapping labels in `platform-system` reported a dozen false drifts when it did).
  *
  * `undefined` is an older backend that sent no such field. That release resolved pods by selector
  * and always produced a verdict, so it is read as resolved rather than as unknown — treating it as

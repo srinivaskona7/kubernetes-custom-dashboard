@@ -5,7 +5,7 @@
  * Extracted rather than inlined so it can be tested without a DOM. `app/fleet-ui`'s vitest runs in
  * `environment: 'node'` on purpose, so anything that has to be *proved* — the filter predicate, the
  * share formatter, the health verdict — lives here, and the `.tsx` files hold only markup. The
- * predicate especially: "which rows does Apple-only show" is the kind of question that is obvious
+ * predicate especially: "which rows does the corporate chip show" is the kind of question that is obvious
  * until a host matches two groups, and a test is cheaper than a screenshot.
  */
 import type { IngressAccess, IngressHost, IngressHostGroup, IngressRate, TrafficIngress } from '../../../api';
@@ -41,7 +41,7 @@ export const GROUP_WHY: Record<IngressHostGroup, string> = {
   corporate:
     'The host ends in a suffix configured as yours, via FLEET_CORPORATE_DOMAIN_SUFFIXES. Nothing about the domain is baked into this console — set no suffixes and this bucket is empty rather than wrong.',
   declared:
-    'An Istio Gateway in this cluster admits this host, and it matched no configured suffix. On Kyma that is normally the per-shoot *.kyma.ondemand.com domain.',
+    'An Istio Gateway in this cluster admits this host, and it matched no configured suffix. Usually the cluster’s own wildcard ingress domain.',
   infra:
     'Cluster plumbing rather than an application: health probes, the connectivity proxy, Kiali. Real traffic and almost never the traffic you came to look at — 620 of 1485 records in a live window.',
   address:
@@ -67,7 +67,7 @@ export const GROUP_TONE: Record<IngressHostGroup, Tone> = {
  * Pure and total: every `HostFilter` has an answer, and `all` keeps everything including the
  * no-Host-header row. The search half matches the host, the matched suffix, the Gateway that admits
  * it and every object that declares it, because an operator searching "shop-rule" is looking for the
- * APIRule by name and the host is what they do not know yet.
+ * route by name and the host is what they do not know yet.
  */
 export function matchesHostFilter(host: IngressHost, filter: HostFilter, needle: string): boolean {
   if (filter !== 'all' && host.group !== filter) return false;

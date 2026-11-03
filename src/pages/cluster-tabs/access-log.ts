@@ -11,7 +11,7 @@
  * So the three states live here, once:
  *
  *   - **`readsSkipped`** — the server did not tail any proxy, because it proved the mesh sends the
- *     access log somewhere pod stdout cannot follow (`kyma-logs` → `envoyOtelAls` → the OTLP
+ *     access log somewhere pod stdout cannot follow (`otel-logs` → `envoyOtelAls` → the OTLP
  *     gateway). Every count over that window is *not read*, not zero.
  *   - **`unprovenZero`** — proxies were tailed, no request line came back, and the log's
  *     destination could not be confirmed (`readable: null` — an unresolved provider name, or an
@@ -30,7 +30,7 @@ import { ago } from '../../format';
 /** What each resolved provider kind means, on hover, in an operator's words. */
 export const PROVIDER_KIND_WHY: Record<string, string> = {
   file: 'envoyFileAccessLog — Envoy writes the line to a file path. When that path is /dev/stdout it is exactly the stream pods/log returns, so this tab can read it.',
-  otlp: 'envoyOtelAls — Envoy streams the line to an OTLP collector over gRPC and writes nothing to the pod. It reaches SAP Cloud Logging, not this tab.',
+  otlp: 'envoyOtelAls — Envoy streams the line to an OTLP collector over gRPC and writes nothing to the pod. It reaches the OTLP backend, not this tab.',
   grpc: 'An Envoy gRPC access-log service. The line leaves the pod over the wire, so pod stdout carries nothing to read.',
   'not-access-log': 'This provider is declared for tracing or metrics, not access logging. Naming it in accessLogging produces no request lines at all.',
   unknown: 'The mesh config declares this provider with an implementation key this console does not recognise. Whether it writes to stdout is genuinely unknown, so the proxies were still read.',

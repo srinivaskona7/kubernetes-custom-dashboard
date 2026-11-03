@@ -68,8 +68,8 @@ export interface UnavailableRead {
  * looking for exists at all.
  *
  * `unavailable`/`truncated`/`partial` above are all about the READ. `presence` is about the
- * FEATURE, and only means anything once the read is known to have happened — Gatekeeper
- * reporting zero ConstraintTemplates is `present, 0 items` when the CRD is served and the
+ * FEATURE, and only means anything once the read is known to have happened — cert-manager
+ * reporting zero Certificates is `present, 0 items` when the CRD is served and the
  * list came back genuinely empty, and `absent` when the CRD isn't registered on this cluster
  * at all. Both render a 0 today; that collapse is exactly the defect this axis exists to
  * remove, motivated by 5 CRDs on the reference cluster that are installed with zero objects.
@@ -852,7 +852,7 @@ export function NotInstalled({
   detail,
   size = 'md'
 }: {
-  /** The operator-facing noun, e.g. "Gatekeeper" or "the Telemetry module". */
+  /** The operator-facing noun, e.g. "cert-manager" or "the Prometheus Operator". */
   what: string;
   detail?: string | null;
   size?: Size;

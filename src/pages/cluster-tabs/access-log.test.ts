@@ -86,22 +86,22 @@ describe('accessLogEvidence — the three states', () => {
 
   it('reports a skipped read as skipped even when the window parsed nothing', () => {
     const e = accessLogEvidence(
-      verdict({ readable: false, recordedElsewhere: true, providers: ['kyma-logs'], providerDetail: [provider({ name: 'kyma-logs', kind: 'otlp', implementation: 'envoyOtelAls', readable: false, destination: 'telemetry-otlp-logs.kyma-system:4317', fields: 'otel' })] }),
+      verdict({ readable: false, recordedElsewhere: true, providers: ['otel-logs'], providerDetail: [provider({ name: 'otel-logs', kind: 'otlp', implementation: 'envoyOtelAls', readable: false, destination: 'telemetry-otlp-logs.platform-system:4317', fields: 'otel' })] }),
       window_({ readsSkipped: true, proxiesRead: 0, requestsParsed: 0, linesRead: 0, linesUnparsed: 0 })
     );
     expect(e.readsSkipped).toBe(true);
     // Mutually exclusive: `unprovenZero` describes a read that happened.
     expect(e.unprovenZero).toBe(false);
     expect(e.noEvidence).toBe(true);
-    expect(e.notRead.why).toBe('not read — kyma-logs streams off the pod');
+    expect(e.notRead.why).toBe('not read — otel-logs streams off the pod');
   });
 
   it('names two off-pod sinks together, and falls back when none has a destination', () => {
     const two = accessLogEvidence(
-      verdict({ readable: false, providerDetail: [provider({ name: 'kyma-logs', readable: false, destination: 'a:4317' }), provider({ name: 'otel-x', readable: false, destination: 'b:4317' })] }),
+      verdict({ readable: false, providerDetail: [provider({ name: 'otel-logs', readable: false, destination: 'a:4317' }), provider({ name: 'otel-x', readable: false, destination: 'b:4317' })] }),
       window_({ readsSkipped: true })
     );
-    expect(two.notRead.why).toBe('not read — kyma-logs and otel-x stream off the pod');
+    expect(two.notRead.why).toBe('not read — otel-logs and otel-x stream off the pod');
 
     // A tracing-only provider records nothing anywhere, so there is no destination to name.
     const none = accessLogEvidence(

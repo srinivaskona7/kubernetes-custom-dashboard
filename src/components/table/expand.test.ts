@@ -46,8 +46,8 @@ describe('isExpanded', () => {
 
 describe('expandLabel', () => {
   test('names the row, not just the action, because a table has one chevron per row', () => {
-    expect(expandLabel(false, 'kyma-fleet/srv-7d9')).toBe('Show details for kyma-fleet/srv-7d9');
-    expect(expandLabel(true, 'kyma-fleet/srv-7d9')).toBe('Hide details for kyma-fleet/srv-7d9');
+    expect(expandLabel(false, 'fleet-dashboard/srv-7d9')).toBe('Show details for fleet-dashboard/srv-7d9');
+    expect(expandLabel(true, 'fleet-dashboard/srv-7d9')).toBe('Hide details for fleet-dashboard/srv-7d9');
   });
 
   test('falls back to a usable name when the row identity is empty', () => {

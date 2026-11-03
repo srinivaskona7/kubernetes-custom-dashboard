@@ -295,7 +295,7 @@ export function IngressHosts({
               );
             })}
             <span className="ml-auto flex min-w-[240px] flex-1 items-center">
-              <SearchBox value={search} onChange={setSearch} placeholder="host, Gateway, APIRule, path, code…" />
+              <SearchBox value={search} onChange={setSearch} placeholder="host, Gateway, route, path, code…" />
             </span>
           </div>
 
@@ -407,7 +407,7 @@ export function IngressHosts({
             }
             mono
           />
-          <Field label="Declared by" value={<RouteRefs refs={selected.servedBy} empty="no VirtualService or APIRule declares it" link />} />
+          <Field label="Declared by" value={<RouteRefs refs={selected.servedBy} empty="no VirtualService, Ingress or HTTPRoute declares it" link />} />
           <Field
             label="Sampled records"
             value={

@@ -38,7 +38,7 @@ import { KubeconfigField, SourceModeToggle, useKubeconfigSource } from './onboar
 import { Check, DetectedPanel, IdentityFields, Row, Step } from './onboard/parts';
 import { CREDENTIAL_LABEL, clusterIdOf, isJwt, suggestEnv, type Env } from './onboard/shared';
 
-const MINT_COMMAND = 'kubectl create token fleet-reader -n kyma-fleet --duration=24h';
+const MINT_COMMAND = 'kubectl create token fleet-reader -n fleet-dashboard --duration=24h';
 
 export default function OnboardPage({ onRefreshed }: PageProps) {
   const navigate = useNavigate();

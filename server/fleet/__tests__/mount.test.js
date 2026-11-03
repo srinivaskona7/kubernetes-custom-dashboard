@@ -103,32 +103,48 @@ test('the fleet body limit leaves room for the router to refuse an oversized kub
   }
 });
 
+const JWKS = { OIDC_JWKS_URL: 'https://idp.example.com/jwks' };
+
 test('FLEET_AUTH=none is refused in production and nowhere else', () => {
-  assert.throws(() => assertAuthAllowed({ NODE_ENV: 'production', FLEET_AUTH: 'none' }), /not permitted/);
-  assert.doesNotThrow(() => assertAuthAllowed({ NODE_ENV: 'production' }));
+  assert.throws(() => assertAuthAllowed({ NODE_ENV: 'production', FLEET_AUTH: 'none', ...JWKS }), /not permitted/);
+  assert.doesNotThrow(() => assertAuthAllowed({ NODE_ENV: 'production', ...JWKS }));
   assert.doesNotThrow(() => assertAuthAllowed({ NODE_ENV: 'development', FLEET_AUTH: 'none' }));
 });
 
-test('fleet auth is disabled exactly when shieldAuth is bypassed, or when FLEET_AUTH=none says so', () => {
+test('AUTH_MODE=none is refused in production and nowhere else', () => {
+  assert.throws(() => assertAuthAllowed({ NODE_ENV: 'production', AUTH_MODE: 'none' }), /AUTH_MODE=none is not permitted/);
+  assert.doesNotThrow(() => assertAuthAllowed({ NODE_ENV: 'development', AUTH_MODE: 'none' }));
+  assert.doesNotThrow(() => assertAuthAllowed({}));
+});
+
+test('oidc mode without OIDC_JWKS_URL is refused, whatever NODE_ENV says', () => {
+  assert.throws(() => assertAuthAllowed({ NODE_ENV: 'production' }), /OIDC_JWKS_URL/);
+  assert.throws(() => assertAuthAllowed({ AUTH_MODE: 'oidc' }), /OIDC_JWKS_URL/);
+  assert.doesNotThrow(() => assertAuthAllowed({ AUTH_MODE: 'oidc', ...JWKS }));
+});
+
+test('fleet auth is disabled exactly when oidcAuth passes requests through, or when FLEET_AUTH=none says so', () => {
   assert.strictEqual(fleetAuthDisabled({}), true);
   assert.strictEqual(fleetAuthDisabled({ NODE_ENV: 'development' }), true);
   assert.strictEqual(fleetAuthDisabled({ NODE_ENV: 'production' }), false);
   assert.strictEqual(fleetAuthDisabled({ NODE_ENV: 'production', FLEET_AUTH: 'none' }), true);
+  assert.strictEqual(fleetAuthDisabled({ AUTH_MODE: 'oidc' }), false);
+  assert.strictEqual(fleetAuthDisabled({ NODE_ENV: 'production', AUTH_MODE: 'none' }), true);
 });
 
-test('in production, a shield identity outside FLEET_ADMIN_GROUPS reads but cannot onboard', async () => {
+test('in production, a verified identity outside FLEET_ADMIN_GROUPS reads but cannot onboard', async () => {
   tempRegistry(JSON.stringify({ clusters: [] }));
   const before = { NODE_ENV: process.env.NODE_ENV, FLEET_ADMIN_GROUPS: process.env.FLEET_ADMIN_GROUPS };
   process.env.NODE_ENV = 'production';
-  process.env.FLEET_ADMIN_GROUPS = '7';
-  // Stands in for shieldAuth, which is mounted app-wide ahead of the fleet in server/index.js.
-  const shield = (req, _res, next) => {
+  process.env.FLEET_ADMIN_GROUPS = 'fleet-admins';
+  // Stands in for oidcAuth, which is mounted app-wide ahead of the fleet in server/index.js.
+  const identity = (req, _res, next) => {
     req.user = req.headers['x-test-groups'] === 'admin'
-      ? { email: 'admin@example.com', groups: [7] }
-      : { email: 'reader@example.com', groups: [1] };
+      ? { email: 'admin@example.com', groups: ['fleet-admins'] }
+      : { email: 'reader@example.com', groups: ['readers'] };
     next();
   };
-  const s = await serve(app => { app.use(shield); mountFleet(app); });
+  const s = await serve(app => { app.use(identity); mountFleet(app); });
   try {
     const reader = await (await fetch(`${s.base}/api/fleet/me`)).json();
     assert.strictEqual(reader.id, 'reader@example.com');

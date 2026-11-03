@@ -32,7 +32,7 @@ const SYSTEM_NAMESPACES = new Set([
   'kube-system', 'kube-public', 'kube-node-lease',
   'istio-system', 'kyma-system', 'kyma-integration',
   'sealed-secrets', 'cicd-serviceaccount', 'gatekeeper-system',
-  'compass-system', 'serverless', 'kyma-fleet'
+  'compass-system', 'serverless', 'fleet-dashboard'
 ]);
 
 const CICD_NAMESPACE = 'cicd-serviceaccount';

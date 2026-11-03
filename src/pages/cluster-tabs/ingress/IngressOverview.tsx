@@ -198,7 +198,7 @@ export function IngressOverview({
       {/* ------------------------------------------------------------ 3. app traffic */}
       <IngressCard
         title="App traffic"
-        hint={`Only requests routed by an APIRule or an application VirtualService — probes, platform hosts and refused scanners are excluded, so these are your applications' numbers. ${windowLine}.`}
+        hint={`Only requests routed by an Ingress, an HTTPRoute or an application VirtualService — probes, platform hosts and refused scanners are excluded, so these are your applications' numbers. ${windowLine}.`}
       >
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
           <StatTile

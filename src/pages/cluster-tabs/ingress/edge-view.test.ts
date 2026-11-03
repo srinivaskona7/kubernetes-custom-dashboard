@@ -41,7 +41,7 @@ function host(over: Partial<IngressHost> = {}): IngressHost {
     group: 'declared',
     matchedSuffix: null,
     gateway: null,
-    servedBy: [{ kind: 'APIRule', name: 'shop', namespace: 'shop', evidence: '', matched: 'shop.example.com' }],
+    servedBy: [{ kind: 'HTTPRoute', name: 'shop', namespace: 'shop', evidence: '', matched: 'shop.example.com' }],
     requests: 10,
     ok: 10,
     redirect: 0,
@@ -71,10 +71,10 @@ function host(over: Partial<IngressHost> = {}): IngressHost {
       dns: { name: 'shop', dnsName: 'shop.example.com', ready: true },
       servers: [
         {
-          gateway: 'kyma-system/kyma-gateway',
+          gateway: 'platform-system/main-gateway',
           port: 443,
           tlsMode: 'SIMPLE',
-          credentialName: 'kyma-gateway-certs',
+          credentialName: 'main-gateway-certs',
           certificate: { namespace: 'istio-system', name: 'wildcard', expires: '2026-12-02', daysLeft: 67, ready: true }
         }
       ]
@@ -169,7 +169,7 @@ describe('app p95', () => {
 
 describe('certificates', () => {
   test('attention follows the issuer: renewal overdue or under 7 days, never a steady-state countdown (UI_SPEC §13a)', () => {
-    // Gardener renews at a third of a 90-day life, so 39-66 days left with renewal pending is healthy.
+    // cert-manager renews with a third of a 90-day life left, so 39-66 days left with renewal pending is healthy.
     expect(certTone({ daysLeft: 39, ready: true, renewalOverdue: false })).toBe('ok');
     expect(certTone({ daysLeft: 20, ready: true, renewalOverdue: false })).toBe('ok');
     expect(certTone({ daysLeft: 40, ready: true, renewalOverdue: true })).toBe('warn');
@@ -185,7 +185,7 @@ describe('certificates', () => {
     const cert = (over: Partial<IngressCertificate>): IngressCertificate => ({
       namespace: 'istio-system',
       name: 'wildcard',
-      secretName: 'kyma-gateway-certs',
+      secretName: 'main-gateway-certs',
       commonName: null,
       dnsNames: [],
       expires: null,
@@ -195,9 +195,9 @@ describe('certificates', () => {
       usedBy: [],
       ...over
     });
-    const byKey = cert({ name: 'by-key', secretName: 'other', usedBy: ['kyma-system/kyma-gateway/443'] });
+    const byKey = cert({ name: 'by-key', secretName: 'other', usedBy: ['platform-system/main-gateway/443'] });
     const bySecret = cert({ name: 'by-secret' });
-    const server = { key: 'kyma-system/kyma-gateway/443', credentialName: 'kyma-gateway-certs' };
+    const server = { key: 'platform-system/main-gateway/443', credentialName: 'main-gateway-certs' };
     expect(certForServer(server, [bySecret, byKey])?.name).toBe('by-key');
     expect(certForServer({ ...server, key: 'x' }, [bySecret])?.name).toBe('by-secret');
     expect(certForServer({ key: 'x', credentialName: null }, [bySecret])).toBeNull();
@@ -269,7 +269,7 @@ describe('hosts & routes order', () => {
       ['DNS', 'shop', 'ok'],
       ['Gateway', ':443 SIMPLE', 'ok'],
       ['Certificate', '67 d left', 'ok'],
-      ['Route', 'APIRule shop', 'ok']
+      ['Route', 'HTTPRoute shop', 'ok']
     ]);
     const broken = chainLinks(host({ chain: { dns: null, servers: [] }, servedBy: [] }));
     expect(broken.map(l => [l.step, l.tone])).toEqual([
@@ -390,7 +390,7 @@ describe('peers (D1)', () => {
     ip: '10.0.0.1',
     kind: 'Pod',
     name: 'probe',
-    namespace: 'kyma-system',
+    namespace: 'platform-system',
     external: false,
     evidence: '',
     requests: 1,

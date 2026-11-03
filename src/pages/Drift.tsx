@@ -1,8 +1,8 @@
 /**
  * Drift — the page with the most assertions per pixel, and therefore the most to get wrong.
  *
- * Every headline here is a claim of sameness: "Control plane in parity", "All modules
- * uniform", "100% aligned". Each of those is computed from a comparison, and a comparison
+ * Every headline here is a claim of sameness: "Control plane in parity", "100% release
+ * parity". Each of those is computed from a comparison, and a comparison
  * over nothing compares equal. A fleet whose tokens have all expired therefore renders as
  * the most reassuring page in the console. Each claim is now gated on having actually read
  * the clusters it claims to have compared.
@@ -14,7 +14,6 @@ import { PageHeader } from '../components/layout';
 import { useSection, type SubTab } from '../components/SubTabs';
 import { useAsync } from '../useAsync';
 import { Pill, ErrorBanner, Dot } from '../components/ui';
-import type { Tone } from '../components/ui';
 import {
   Count,
   MetricValue,
@@ -26,48 +25,29 @@ import {
 import { bytes, cores } from '../format';
 import type { PageProps } from '../App';
 
-type TabView = 'modules' | 'kubernetes' | 'workloads';
+type TabView = 'kubernetes' | 'workloads';
 
 /**
- * The three views, as data, so the URL reader can validate `?section=` against them.
+ * The two views, as data, so the URL reader can validate `?section=` against them.
  *
  * This strip was the only one of the sixteen in the product still held in `useState`. That made
  * it the only one where a link an operator copied out of the address bar always reopened on
- * Modules, however deep into Workload Image Drift they were when they copied it — and this page
+ * the first view, however deep into Workload Image Drift they were when they copied it — and this page
  * exists to be shared, since its whole subject is a discrepancy someone else has to look at.
  *
  * It uses the shared `?section=` key rather than a private one for the same reason every cluster
  * tab does: `useSection` falls back to its own default whenever the current value is not one of
- * its own ids, so arriving here carrying `?section=mesh` from somewhere else lands on Modules
- * rather than on a blank page.
+ * its own ids, so arriving here carrying `?section=mesh` from somewhere else lands on the first
+ * view rather than on a blank page.
  */
 const DRIFT_VIEWS: readonly SubTab<TabView>[] = [
-  { id: 'modules', label: 'Kyma Core Modules' },
   { id: 'kubernetes', label: 'Kubernetes & Node Parity' },
   { id: 'workloads', label: 'Workload Image Drift' }
 ];
 
-/**
- * `moduleParity[].clusterStatus[id].status` used to be a fixed enum
- * ('active'|'degraded'|'missing'|'unknown') guessed from Deployment name substrings. Wave 2
- * rewired it to `modules.js`'s own Kyma CR read (B1), so `status` is now either 'missing'
- * (module not requested/reconciled on this cluster), 'unknown' (the cluster's Kyma CR list
- * itself could not be read), or the real `status.modules[].state` string the Kyma operator
- * wrote — 'Ready', 'Warning', 'Error', 'Processing', 'Deleting', and whatever else the
- * operator emits. This maps that open-ended state to the validated palette's tone rather
- * than pretending it is still a closed enum.
- */
-function moduleTone(status: string): Tone {
-  const s = status.toLowerCase();
-  if (s === 'ready') return 'ok';
-  if (s === 'error') return 'bad';
-  if (s === 'warning' || s === 'processing' || s === 'deleting') return 'warn';
-  return 'unknown';
-}
-
 export default function Drift({ onRefreshed }: PageProps) {
   const { data, loading, error, reload } = useAsync<FleetDrift>(useCallback(() => api.drift(), []));
-  const [activeTab, setActiveTab] = useSection<TabView>(DRIFT_VIEWS, 'modules');
+  const [activeTab, setActiveTab] = useSection<TabView>(DRIFT_VIEWS, 'kubernetes');
   const [search, setSearch] = useState('');
   const [driftOnly, setDriftOnly] = useState(false);
 
@@ -80,7 +60,6 @@ export default function Drift({ onRefreshed }: PageProps) {
   };
 
   const clusters = data?.clusterParity || [];
-  const modules = data?.moduleParity || [];
   const workloads = data?.items || [];
 
   const filteredWorkloads = workloads.filter(item => {
@@ -103,109 +82,10 @@ export default function Drift({ onRefreshed }: PageProps) {
     [data?.summary, data?.clusterParity]
   );
   const parityStatus = scope.of('cluster versions', 'nodes', 'version');
-  // The labels the module collector actually emits — `kymas` and `modulereleasemetas`
-  // (modules.js:34-35) — not just the generic 'modules'. Naming only the generic one meant a
-  // refused `modulereleasemetas` left this status at 'ok', and the card below then rendered a
-  // green "All modules uniform" over an empty comparison table. A read that never happened
-  // cannot certify parity.
-  const moduleStatus = scope.of(
-    'Kyma module parity',
-    'modules',
-    'kymas',
-    'modulereleasemetas',
-    'kyma modules',
-    'deployments'
-  );
   const imageStatus = scope.of('workload images', 'workloads', 'deployments');
 
   /** Why one row has no numbers: its own reachability, said on the row itself. */
   const rowWhy = (what: string) => `could not read ${what} — this cluster did not answer`;
-
-  /*
-    The three matrices are `DataTable`s. The module matrix is the interesting one: its columns are
-    the fleet, so the array is built from `clusters` and grows with the registry — which is exactly
-    why it has to come from one column definition applied to the `th` and the `td` together. The
-    hand-written version declared `min-w-[180px]` on the header only, and the body cell below it
-    was sized by whatever the longest module state happened to be.
-
-    Cluster columns state `align: 'left'` rather than letting the classifier read the header: that
-    header is a cluster's display name, and a fleet with a cluster called `prod-metrics-01` would
-    otherwise have one column right-aligned because its name contains a word the classifier knows.
-  */
-  const moduleColumns: Column<(typeof modules)[number]>[] = [
-    {
-      key: 'module',
-      header: 'Module Component',
-      pin: true,
-      max: '260px',
-      sortValue: mod => mod.module,
-      render: mod => (
-        <div>
-          <div className="font-medium text-text">{mod.module}</div>
-          <div className="text-[12px] text-muted">
-            {mod.module.includes('Istio') && 'istio-system · Service mesh & ingress gateway'}
-            {mod.module.includes('Telemetry') && 'kyma-system · OpenTelemetry collectors & logging'}
-            {mod.module.includes('Serverless') && 'kyma-system · Knative & Kubeless serverless functions'}
-            {mod.module.includes('Keda') && 'kyma-system · Event-driven auto-scaler & metrics'}
-            {mod.module.includes('Eventing') && 'kyma-system · NATS JetStream event broker'}
-            {mod.module.includes('BTP') && 'kyma-system · SAP BTP Service Manager binding operator'}
-          </div>
-        </div>
-      )
-    },
-    {
-      key: 'parity',
-      header: 'Fleet Parity',
-      // Drift first: the row worth reading is the one that disagrees with itself.
-      sortValue: mod => (mod.isDrifted ? 0 : 1),
-      render: mod => <Pill tone={mod.isDrifted ? 'warn' : 'ok'}>{mod.isDrifted ? 'Drift Detected' : 'Aligned'}</Pill>
-    },
-    ...clusters.map<Column<(typeof modules)[number]>>(c => ({
-      key: `cluster:${c.id}`,
-      align: 'left',
-      min: '180px',
-      header: (
-        <>
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-text">{c.displayName || c.id}</span>
-            <span className="mono rounded border border-line bg-raised px-1 py-0.2 text-[10px] font-bold uppercase text-muted">
-              {c.env}
-            </span>
-          </div>
-          <div className="mono text-[11px] font-normal lowercase text-muted">{c.id}</div>
-        </>
-      ),
-      sortValue: mod => mod.clusterStatus[c.id]?.status ?? 'unknown',
-      render: mod => {
-        const st = mod.clusterStatus[c.id] || { status: 'unknown', installed: false };
-        // `status` is no longer a closed enum (see moduleTone doc above) — 'missing' (module not
-        // present on this cluster) and 'unknown' (this cluster's Kyma CR read itself failed) are
-        // the two states with no version to show; everything else is the operator's own `state`
-        // string, rendered with a dot in the matching tone.
-        if (st.status === 'missing' || st.status === 'unknown') {
-          return (
-            <div className="flex items-center gap-1.5 text-muted">
-              <Dot tone="unknown" />
-              <span className="text-[13px]">{st.status === 'missing' ? 'Not installed' : 'Unreachable'}</span>
-            </div>
-          );
-        }
-        return (
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-1.5">
-              <Dot tone={moduleTone(st.status)} />
-              <span className={`text-[13px] font-medium text-${moduleTone(st.status)}`}>{st.status}</span>
-            </div>
-            {st.version && (
-              <span className="mono max-w-[150px] truncate text-[11px] text-muted" title={st.version}>
-                tag: {st.version}
-              </span>
-            )}
-          </div>
-        );
-      }
-    }))
-  ];
 
   const parityColumns: Column<(typeof clusters)[number]>[] = [
     {
@@ -387,8 +267,8 @@ export default function Drift({ onRefreshed }: PageProps) {
       <PageHeader
         title="Cross-Cluster Drift & Parity Matrix"
         icon="drift"
-        info="Compares every onboarded cluster on Kubernetes version, Kyma module channels and workload container image tags. It reports differences, not a target \u2014 the console has no notion of which cluster is correct."
-        subtitle="Multi-cluster audit of Kubernetes control plane versions, Kyma core modules, and workload container images"
+        info="Compares every onboarded cluster on Kubernetes version, node capacity and workload container image tags. It reports differences, not a target \u2014 the console has no notion of which cluster is correct."
+        subtitle="Multi-cluster audit of Kubernetes control plane versions, node capacity, and workload container images"
         actions={
           <div className="flex items-center gap-2">
             <button
@@ -413,7 +293,7 @@ export default function Drift({ onRefreshed }: PageProps) {
       {/*
        * Gate on `data` being present, not merely on the absence of an error: a page-level
        * fetch failure with no prior successful load must never let the summary cards or the
-       * matrix render at all, because every fallback below (`data?.moduleParity || []`, etc.)
+       * matrix render at all, because every fallback below (`data?.items || []`, etc.)
        * turns "we never asked" into an empty array — and an empty array reads as a confident
        * zero, indistinguishable from a genuinely drift-free fleet. `useAsync` keeps the last
        * good `data` across a failed refetch, so this only ever hides the page on the very
@@ -430,7 +310,7 @@ export default function Drift({ onRefreshed }: PageProps) {
       ) : (
         <>
       {/* Summary Stat Cards */}
-      <div className="grid grid-cols-2 gap-4 page-x pb-4 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 page-x pb-4 lg:grid-cols-3">
         {/* K8s Version Parity Card */}
         <div className="rounded-[8px] border border-line bg-surface p-4 shadow-sm">
           <div className="flex items-center justify-between">
@@ -451,36 +331,6 @@ export default function Drift({ onRefreshed }: PageProps) {
               <Pill tone="unknown">In parity across the {parityStatus.total - parityStatus.blind} we could read</Pill>
             ) : (
               <Pill tone="ok">Control plane in parity</Pill>
-            )}
-          </div>
-        </div>
-
-        {/* Kyma Core Modules Card */}
-        <div className="rounded-[8px] border border-line bg-surface p-4 shadow-sm">
-          <div className="flex items-center justify-between">
-            <span className="text-[13px] font-medium text-muted">Kyma Core Modules</span>
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <MetricValue status={moduleStatus} size="md" className="text-[20px] font-semibold text-text">
-              {modules.length > 0
-                ? `${modules.filter(m => !m.isDrifted).length}/${modules.length} Aligned`
-                : '—'}
-            </MetricValue>
-          </div>
-          <div className="mt-2 flex items-center gap-1.5">
-            {moduleStatus.state === 'unavailable' ? (
-              <Pill tone="unknown">Modules not compared</Pill>
-            ) : modules.length === 0 ? (
-              // Zero modules to compare is never a passing parity check. The status may read
-              // 'ok' — every list the scope names came back — and the comparison still be
-              // empty, so this branch has to sit ahead of the green one.
-              <Pill tone="unknown">Nothing to compare</Pill>
-            ) : data?.summary.driftedModulesCount && data.summary.driftedModulesCount > 0 ? (
-              <Pill tone="warn">{data.summary.driftedModulesCount} module drift</Pill>
-            ) : moduleStatus.state === 'partial' ? (
-              <Pill tone="unknown">Uniform across the {moduleStatus.total - moduleStatus.blind} we could read</Pill>
-            ) : (
-              <Pill tone="ok">All modules uniform</Pill>
             )}
           </div>
         </div>
@@ -555,25 +405,6 @@ export default function Drift({ onRefreshed }: PageProps) {
           <button
             type="button"
             role="tab"
-            aria-selected={activeTab === 'modules'}
-            onClick={() => setActiveTab('modules')}
-            className={`flex items-center gap-2 rounded-[6px] px-3.5 py-1.5 text-[14px] font-medium transition-colors cursor-pointer ${
-              activeTab === 'modules'
-                ? 'bg-accent text-white shadow-sm'
-                : 'text-muted hover:bg-raised hover:text-text'
-            }`}
-          >
-            <span>Kyma Core Modules</span>
-            {data?.summary.driftedModulesCount && data.summary.driftedModulesCount > 0 ? (
-              <span className="rounded-full bg-warn/20 px-1.5 py-0.2 text-[11px] font-bold text-warn">
-                {data.summary.driftedModulesCount}
-              </span>
-            ) : null}
-          </button>
-
-          <button
-            type="button"
-            role="tab"
             aria-selected={activeTab === 'kubernetes'}
             onClick={() => setActiveTab('kubernetes')}
             className={`flex items-center gap-2 rounded-[6px] px-3.5 py-1.5 text-[14px] font-medium transition-colors cursor-pointer ${
@@ -641,69 +472,7 @@ export default function Drift({ onRefreshed }: PageProps) {
           <ErrorBanner code={error.code} message={error.message} />
         )}
 
-        {/* ================= VIEW 1: KYMA CORE MODULES MATRIX ================= */}
-        {activeTab === 'modules' && (
-          <div className="space-y-4">
-            <div className="rounded-[8px] border border-line bg-surface overflow-hidden shadow-sm">
-              <div className="panel-head py-3.5 bg-raised/20 flex items-center justify-between">
-                <div>
-                  <h3 className="text-[15px] font-semibold text-text">Kyma Core Module Distribution</h3>
-                  <p className="text-[13px] text-muted">
-                    Side-by-side status of essential Kyma runtime components across all target clusters
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="flex items-center gap-1 text-[12px] text-muted">
-                    <Dot tone="ok" /> Ready
-                  </span>
-                  <span className="flex items-center gap-1 text-[12px] text-muted">
-                    <Dot tone="warn" /> Warning / Processing
-                  </span>
-                  <span className="flex items-center gap-1 text-[12px] text-muted">
-                    <Dot tone="bad" /> Error
-                  </span>
-                  <span className="flex items-center gap-1 text-[12px] text-muted">
-                    <Dot tone="unknown" /> Not Installed / Unreachable
-                  </span>
-                </div>
-              </div>
-
-              <div className="card-body-flush">
-                <DataTable
-                  id="drift.modules"
-                  columns={moduleColumns}
-                  rows={modules}
-                  rowKey={mod => mod.module}
-                  // Two fixed columns plus one per cluster, so the widest tier — and the module
-                  // name stays pinned while the fleet scrolls past it.
-                  shed="wide"
-                  empty={
-                    moduleStatus.state === 'ok' ? (
-                      'No module parity data collected yet'
-                    ) : (
-                      <UnavailableEmptyBody status={moduleStatus} />
-                    )
-                  }
-                />
-              </div>
-            </div>
-
-            {/* Architecture Guidelines */}
-            <div className="rounded-[8px] border border-line bg-surface p-4 text-[13px] text-muted space-y-2">
-              <div className="font-semibold text-text flex items-center gap-1.5">
-                <span>Kyma Module Lifecycle & Governance</span>
-              </div>
-              <p>
-                Core modules can be dynamically enabled or customized per cluster via Kyma custom resources in{' '}
-                <code className="mono rounded bg-raised px-1 py-0.5 text-text">kyma-system</code>. Modules marked with{' '}
-                <span className="text-warn font-medium">Drift Detected</span> indicate discrepancies where workloads
-                on one cluster rely on extensions that are missing or running in degraded states on other clusters.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ================= VIEW 2: KUBERNETES & NODE PARITY ================= */}
+        {/* ================= VIEW 1: KUBERNETES & NODE PARITY ================= */}
         {activeTab === 'kubernetes' && (
           <div className="space-y-4">
             <div className="rounded-[8px] border border-line bg-surface overflow-hidden shadow-sm">
@@ -747,7 +516,7 @@ export default function Drift({ onRefreshed }: PageProps) {
           </div>
         )}
 
-        {/* ================= VIEW 3: WORKLOAD IMAGE DRIFT ================= */}
+        {/* ================= VIEW 2: WORKLOAD IMAGE DRIFT ================= */}
         {activeTab === 'workloads' && (
           <div className="space-y-4">
             <div className="rounded-[8px] border border-line bg-surface overflow-hidden shadow-sm">

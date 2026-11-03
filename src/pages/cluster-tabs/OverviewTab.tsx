@@ -20,7 +20,7 @@
  * bar on this screen: the count is the headline, the tab is the detail, and having the detail twice
  * is how two screens come to disagree.
  *
- * ## Six pillars, not seventeen tiles
+ * ## Five pillars, not seventeen tiles
  *
  * This grid used to carry every summary group the server produces, plus two link-only tiles and one
  * tile for a subject no screen renders. Eighteen cells is not a triage surface — it is an index, and
@@ -31,7 +31,7 @@
  * never agreed to enforce. An Overview that cries wolf three times on a healthy cluster trains the
  * operator to skip it.
  *
- * So the grid is now the six topics that are worth a glance on every cluster. Nothing was made
+ * So the grid is now the five topics that are worth a glance on every cluster. Nothing was made
  * unreachable: every tab still has a permanent link in the rail, and every metric that left this
  * screen is still rendered — and still counted — by the tab that owns it. The two link-only tiles
  * went for the same reason and not because their subjects got cheaper: a tile whose whole content is
@@ -98,7 +98,7 @@ function topic<TargetTab extends keyof typeof TAB_SECTIONS>(value: Omit<Topic, '
 }
 
 /**
- * The six topics worth a glance on every cluster, in reading order.
+ * The five topics worth a glance on every cluster, in reading order.
  *
  * Each label names the *subject*, not the tab — "Nodes & Capacity" rather than "Nodes & pods" —
  * because the line underneath already names the destination and an operator scanning the grid is
@@ -114,8 +114,8 @@ function topic<TargetTab extends keyof typeof TAB_SECTIONS>(value: Omit<Topic, '
  *    unchanged and still counted.
  *  - `mesh`, `security`, `integrity` and `observability` are real signals and genuinely specialist:
  *    an operator who cares about sidecar coverage or APIService health goes to that tab on purpose.
- *  - `btpServices` had no screen at all, so its tile was a dead end by construction. `reliability`
- *    left for the same reason when its Namespaces & Workloads sub-tab was removed (2026-09-25).
+ *  - `reliability` had no screen left once its Namespaces & Workloads sub-tab was removed
+ *    (2026-09-25), so its tile would have been a dead end by construction.
  *
  * The order is the tab strip's order, so the Overview and the navigation describe the cluster in
  * the same sequence.
@@ -124,9 +124,8 @@ const TOPICS: Topic[] = [
   topic({ key: 'health', label: 'Nodes & Capacity', what: 'nodes ready, pods running, requests vs allocatable', icon: 'nodes', tab: 'nodes', section: 'overview' }),
   topic({ key: 'workloads', label: 'Workloads & Controllers', what: 'ready vs desired across every controller', icon: 'workloads', tab: 'workloads', section: 'workloads' }),
   topic({ key: 'autoscaling', label: 'Autoscaling', what: 'HPAs at their ceiling, failed jobs', icon: 'autoscaling', tab: 'workloads', section: 'hpas' }),
-  topic({ key: 'networking', label: 'Networking & Ingress', what: 'APIRules, Ingresses, Services, NetworkPolicies', icon: 'network', tab: 'networking', section: 'networking' }),
-  topic({ key: 'certificates', label: 'TLS Certificates', what: 'expiry and Ingress TLS bindings', icon: 'security', tab: 'certificates', section: 'certificates' }),
-  topic({ key: 'modules', label: 'Kyma Modules & Platform', what: 'installed modules, channels, states', icon: 'platform', tab: 'platform', section: 'modules' })
+  topic({ key: 'networking', label: 'Networking & Ingress', what: 'Ingresses, Gateway API routes, Services, NetworkPolicies', icon: 'network', tab: 'networking', section: 'networking' }),
+  topic({ key: 'certificates', label: 'TLS Certificates', what: 'expiry and Ingress TLS bindings', icon: 'security', tab: 'certificates', section: 'certificates' })
 ];
 
 /**
@@ -189,7 +188,7 @@ export default function OverviewTab({
     <div className="space-y-4">
       <Section
         title="What to look at"
-        hint="Worst first. Six topics, one verdict apiece, then the namespace inventory — open a tile for the rows behind its count."
+        hint="Worst first. Five topics, one verdict apiece, then the namespace inventory — open a tile for the rows behind its count."
       >
         {/* Separated tiles rather than the old gap-px divider grid. At eighteen cells the dense
             grid was right; at six the composition is a row of pillars, and three columns of

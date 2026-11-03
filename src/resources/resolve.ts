@@ -9,7 +9,7 @@
  * ## Why resolvers compose
  *
  * No single payload holds every Kind. The overview has workloads, pods, nodes and namespaces;
- * networking has Services and APIRules; storage has PVCs; and so on. Rather than one resolver
+ * networking has Services and Ingresses; storage has PVCs; and so on. Rather than one resolver
  * that knows about every endpoint — which would force the cluster page to fetch all of them on
  * mount just so a drawer *might* work — each tab contributes the resolver for the data it
  * already has, and `combineResolvers` tries them in turn.
@@ -96,7 +96,7 @@ export function makeOverviewResolver(data: ClusterOverview | null): Resolver {
 
 // ---------------------------------------------------------------- networking
 
-/** Services, Ingresses, APIRules and VirtualServices. */
+/** Services, Ingresses, Gateway API Gateways and HTTPRoutes, and VirtualServices. */
 export function makeNetworkingResolver(data: NetworkingData | null | undefined): Resolver {
   return (ref: ResourceRef) => {
     if (!data) return undefined;
@@ -105,8 +105,10 @@ export function makeNetworkingResolver(data: NetworkingData | null | undefined):
         return data.services?.find(r => sameObject(r, ref));
       case 'Ingress':
         return data.ingresses?.find(r => sameObject(r, ref));
-      case 'APIRule':
-        return data.apirules?.find(r => sameObject(r, ref));
+      case 'Gateway':
+        return data.gateways?.find(r => sameObject(r, ref));
+      case 'HTTPRoute':
+        return data.httproutes?.find(r => sameObject(r, ref));
       case 'VirtualService':
         return data.virtualservices?.find(r => sameObject(r, ref));
       default:

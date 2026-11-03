@@ -16,15 +16,14 @@ const FAKE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '
  *   - Networking said "…and NetworkPolicies". `networking.js` issues no networkpolicies request; the
  *     only reads are in `security.js`, `compliance.js` and `helm-related.js`. An operator read
  *     "isolation was evaluated here" off a screen that evaluates nothing.
- *   - platform/integrity said it checks CRDs. `platform.js` lists `apiservices` and nothing else.
- *   - platform/observability promised pipeline "destinations". `observability.js` projects no
+ *   - observability promised pipeline "destinations". `observability.js` projects no
  *     destination, output or host field, so "where are my logs shipped" was invited and unanswerable.
  *   - security/isolation said "mesh policy". `security.js` reads namespaces, networkpolicies, pods,
  *     secrets and serviceaccounts — Istio PeerAuthentication and AuthorizationPolicy are `mesh.js`,
  *     rendered on `?tab=network&section=mesh`. The first fix of the networking line routed the
  *     operator *to* this screen, which made the over-claim here the destination's own problem.
  *
- * The opposite failure is also guarded: an **under**-description. `platform/observability` renders
+ * The opposite failure is also guarded: an **under**-description. `observability` renders
  * three panels, and a one-clause label naming only the pipelines deletes the operator's provenance
  * for the other two. Every assertion here is claim-shaped rather than string-shaped — it must fail on
  * a paraphrase of the wrong claim, not only on the original punctuation.
@@ -52,7 +51,6 @@ const code = src => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^[ \t]*\/\/.*$
 
 const TABS = code(read('src', 'pages', 'cluster-tabs', 'tabs.ts'));
 const AUTOSCALING_TAB = code(read('src', 'pages', 'cluster-tabs', 'AutoscalingTab.tsx'));
-const DOC = read('docs', 'features', 'KYMA_FLEET_TABS_AND_FEATURES.md');
 
 /** The `description:` string literal belonging to one `?section=` id. */
 function descriptionsFor(sectionId) {
@@ -87,29 +85,19 @@ test('the networking section does not claim a NetworkPolicy read its collector n
   // And it must hand the operator the screen that does evaluate isolation.
   assert.match(descriptionsFor('networking'), /Security & Isolation/);
   assert.match(tabAbout('network'), /Security & Isolation/);
-  // Correcting an over-claim must not introduce an under-claim: networking.js issues five reads, and
+  // Correcting an over-claim must not introduce an under-claim: networking.js issues six reads, and
   // the Gateways one was dropped from both labels while the NetworkPolicy clause was being removed.
   const bare = code(collector);
   assert.match(bare, /'istio-gateways'/, 'the Istio Gateways read is gone from networking.js');
   assert.match(descriptionsFor('networking'), /Gateways/i, 'networking.js reads Istio Gateways — say so');
   assert.match(tabAbout('network'), /Gateways/i, 'networking.js reads Istio Gateways — say so');
-  const networkingRow = DOC.split('\n').find(l => l.startsWith('| `networking` |'));
-  assert.match(networkingRow, /Gateways/i, 'the doc row drops the Istio Gateways read');
 });
 
-test('platform/integrity does not claim a CustomResourceDefinition read', () => {
-  const collector = read('server', 'fleet', 'collectors', 'platform.js');
-  const reads = /customresourcedefinitions/i.test(collector);
-  assert.strictEqual(reads, false, 'platform.js now reads CRDs — restore the wording and this guard');
-  assert.doesNotMatch(descriptionsFor('integrity'), /CRD|CustomResourceDefinition/i);
-  assert.doesNotMatch(tabAbout('platform'), /CustomResourceDefinition/i);
-});
-
-test('platform/observability describes every panel it renders, and promises no destination', () => {
+test('observability describes every panel it renders, and promises no destination', () => {
   const collector = read('server', 'fleet', 'collectors', 'observability.js');
   const projects = /\b(destination|output|host)\s*:/i.test(collector);
   assert.strictEqual(projects, false, 'observability.js now projects a destination — say so in the description');
-  const description = descriptionsFor('observability');
+  const description = descriptionsFor('telemetry');
   // Claim-shaped, not string-shaped: any wording is fine as long as every clause that mentions a
   // destination denies it. A relapse to "…and their destinations." fails whatever the punctuation.
   const destinationClaims = description
@@ -120,18 +108,24 @@ test('platform/observability describes every panel it renders, and promises no d
   }
   assert.strictEqual(destinationClaims.length > 0, true, 'the description no longer says destinations are out of reach');
 
-  // The screen renders three panels, so the description — the operator's only provenance for them —
-  // has to name all three reads the collector makes for it. An under-description deletes a feature
-  // from the record as surely as deleting the panel would.
+  // The section's description is the operator's only provenance for its panels, so it has to name
+  // every read behind a panel it renders. The Prometheus-Operator panel is rendered only when the
+  // tab does not hide it, and the description has to follow that either way.
   const reads = label => new RegExp(`'${label}'`).test(collector);
   assert.ok(reads('servicemonitors') && reads('prometheusrules'), 'the Prometheus-Operator reads are gone');
   assert.ok(reads('daemonsets'), 'the OTel agent DaemonSet read is gone');
   assert.ok(reads('logpipelines'), 'the telemetry pipeline reads are gone');
-  assert.match(description, /Prometheus-Operator/i, 'the Prometheus-Operator panel is rendered but not described');
+  const tab = code(read('src', 'pages', 'cluster-tabs', 'ObservabilityTab.tsx'));
+  const rendersOperator = !/<ObservabilitySection[^>]*\bhidePrometheusOperator\b/.test(tab);
+  assert.strictEqual(
+    /Prometheus-Operator/i.test(description),
+    rendersOperator,
+    rendersOperator ? 'the Prometheus-Operator panel is rendered but not described' : 'the description names a panel the tab hides'
+  );
   assert.match(description, /DaemonSet/i, 'the OTel agent DaemonSet panel is rendered but not described');
   assert.match(description, /pipeline/i, 'the telemetry pipeline panel is rendered but not described');
-  assert.match(tabAbout('platform'), /ServiceMonitors/i, 'TAB_ABOUT drops the Prometheus-Operator read');
-  assert.match(tabAbout('platform'), /DaemonSet/i, 'TAB_ABOUT drops the OTel agent DaemonSet read');
+  assert.match(tabAbout('observability'), /Prometheus-Operator/i, 'TAB_ABOUT drops the Prometheus-Operator read');
+  assert.match(tabAbout('observability'), /agent coverage/i, 'TAB_ABOUT drops the OTel agent DaemonSet read');
 });
 
 test('security does not claim the mesh policy read its collector never makes', () => {
@@ -140,7 +134,6 @@ test('security does not claim the mesh policy read its collector never makes', (
   // Two-sided, and anchored on the verb so that naming the screen which *does* evaluate mTLS is not
   // read as a relapse. mesh.js owns those objects and renders them on network/mesh.
   const promises =
-    /Reads[^.]*(mesh polic|PeerAuthentication|AuthorizationPolic|mTLS)/i.test(descriptionsFor('admission')) ||
     /Reads[^.]*(mesh polic|PeerAuthentication|AuthorizationPolic|mTLS)/i.test(descriptionsFor('isolation')) ||
     /Reads[^.]*(PeerAuthentication|AuthorizationPolic|mTLS)/i.test(tabAbout('security'));
   assert.strictEqual(
@@ -157,39 +150,11 @@ test('security does not claim the mesh policy read its collector never makes', (
   assert.match(code(read('server', 'fleet', 'collectors', 'mesh.js')), /peerauthentications/i);
 });
 
-test('platform/modules does not claim a Services read', () => {
-  const collector = read('server', 'fleet', 'collectors', 'modules.js');
-  assert.doesNotMatch(collector, /serviceinstances/i);
-  const reads = /'services'|\/api\/v1\/(?:[^']*)services/i.test(code(collector));
-  assert.strictEqual(reads, false, 'modules.js now reads Services — say so in the description');
-  const description = descriptionsFor('modules');
-  assert.doesNotMatch(description, /BTP|service instances/i);
-  // Claim-shaped: any sentence that reads Services is the defect, whatever its punctuation.
-  assert.doesNotMatch(description, /Reads[^.]*\bservices\b/i);
-});
-
 test('the autoscaling descriptions do not claim a Jobs read', () => {
   const collector = read('server', 'fleet', 'collectors', 'autoscaling.js');
   assert.doesNotMatch(collector, /batch\/v1\/jobs/);
   assert.doesNotMatch(tabAbout('workloads'), /\bJobs from batch\/v1/);
   assert.doesNotMatch(descriptionsFor('cronjobs'), /recent Job outcomes/);
-});
-
-test('the docs do not send an operator to a screen that cannot answer them', () => {
-  const networkingRow = DOC.split('\n').find(l => l.startsWith('| `networking` |'));
-  assert.ok(networkingRow, 'the networking sub-tab row is gone from the doc');
-  assert.doesNotMatch(networkingRow, /NetworkPolic/i);
-
-  const isolationRow = DOC.split('\n').find(l => l.startsWith('| `isolation` |'));
-  assert.ok(isolationRow, 'the isolation sub-tab row is gone from the doc');
-  // Claim-shaped: the row may point at the mesh screen, it may not list mTLS among what it shows.
-  assert.doesNotMatch(isolationRow, /mTLS|PeerAuthentication|AuthorizationPolic/i);
-
-  const hoverRow = DOC.split('\n').find(l => l.includes('Hover-intent prefetch'));
-  assert.ok(hoverRow, 'the hover-intent row is gone from the doc');
-  const overview = read('src', 'pages', 'Overview.tsx');
-  assert.doesNotMatch(overview, /onIntent/, 'Overview.tsx now prefetches — mark the doc row verified');
-  assert.match(hoverRow, /KNOWN GAP/);
 });
 
 test('the HPA Status pill is computed by hpaStatus, not inline', () => {

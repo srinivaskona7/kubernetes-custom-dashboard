@@ -26,11 +26,11 @@ const {
   FLEET_NAMESPACE, FLEET_SA, CLUSTER_ROLE, SELF_MINT_ROLE
 } = onboardModule;
 
-const labels = { 'app.kubernetes.io/managed-by': 'kyma-fleet-dashboard' };
+const labels = { 'app.kubernetes.io/managed-by': 'k8s-fleet-dashboard' };
 
 /**
  * The default object names. Every one is overridable, because a cluster's owner may have
- * a naming convention that a hardcoded `kyma-fleet-reader` would violate — and being told
+ * a naming convention that a hardcoded `fleet-dashboard-reader` would violate — and being told
  * to rename by hand after generating is how the applied YAML drifts from what the
  * dashboard then looks for.
  *
